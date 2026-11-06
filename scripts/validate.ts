@@ -4,8 +4,7 @@
 // Exit code 1 when any file has errors.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import catJson from '../src/data/catalogue.json';
-import type { Catalogue } from '../src/core/catalogue';
+import { DEFAULT_CATALOGUE } from '../src/core/defaultCatalogue';
 import { decodeBytes, parseGcNpd95 } from '../src/core/parser';
 import { validate } from '../src/core/validator';
 import { toJson } from '../src/core/json';
@@ -17,7 +16,7 @@ if (!files.length) {
   console.error('Usage: npm run validate -- <file> [more files] [--generic] [--json | --json-flat]');
   process.exit(2);
 }
-const cat = catJson as unknown as Catalogue;
+const cat = DEFAULT_CATALOGUE;
 let failed = false;
 for (const f of files) {
   const { text, encoding } = decodeBytes(readFileSync(f));

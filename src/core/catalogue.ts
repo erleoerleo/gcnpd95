@@ -32,6 +32,8 @@ export interface ParameterDef {
 
 export interface Catalogue {
   source: string;
+  /** where the wellbore and company lists come from, when they replace the catalogue's own */
+  sources?: { wellbores?: string; companies?: string };
   dictionaryNames: string[];
   attributes: Record<string, AttributeDef>;
   lookupGroups: Record<string, string>; // id -> name

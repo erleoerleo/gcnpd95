@@ -109,7 +109,8 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
     issues.push({ severity: 'error', code, message, line, hint, blockId });
 
   const companies = cat.lookups[LOOKUP.Company] ?? {};
-  const companyCi = new Map(Object.keys(companies).map((k) => [k.toLowerCase(), k]));
+  const companyList = cat.sources?.companies ? 'the approved company list' : 'the catalogue company codes';
+  const wellList = cat.sources?.wellbores ? 'the approved wellbore list' : 'the wellbore list of the catalogue';
 
   // ---------- File definition ----------
   const fd = new Map<string, { value: string; line: number }>();
@@ -156,10 +157,7 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
     add('D04', `DTJStatus "${st.value}" must be ${Object.keys(cat.lookups[LOOKUP.DTJStatus] ?? {}).join(' (new) or ')} (retransfer).`, st.line);
   for (const k of ['Sender', 'Recipient']) {
     const e = fd.get(k);
-    if (e && e.value && !(e.value in companies)) {
-      const ci = companyCi.get(e.value.toLowerCase());
-      add('S03', `${k} "${e.value}" is not a company code in the catalogue.`, e.line, ci ? `Use the code ${ci}.` : undefined);
-    }
+    if (e && e.value && !(e.value in companies)) add('S03', `${k} "${e.value}" is not in ${companyList}.`, e.line, companyHint(e.value, cat));
   }
   const order = pf.fileDef.map((e) => e.name);
   if (FILEDEF_ORDER.some((n, i) => order[i] !== n) && FILEDEF_ORDER.every((n) => order.includes(n)))
@@ -221,11 +219,7 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
       const legal = cat.lookups[def.lookupId] ?? {};
       if (!(v in legal)) {
         if (def.lookupId === LOOKUP.Company) {
-          if (def.name === 'Sender' || def.name === 'Recipient') add('S03', `${def.name} "${v}" is not a company code in the catalogue.`, line, undefined, blockId);
-          else {
-            const ci = companyCi.get(v.toLowerCase());
-            add('S04', `${def.name} "${v}" is not a company code in the catalogue.`, line, ci ? `The catalogue code is ${ci}.` : 'Use the full official company name if the company has no code.', blockId);
-          }
+          add(def.name === 'Sender' || def.name === 'Recipient' ? 'S03' : 'S04', `${def.name} "${v}" is not in ${companyList}.`, line, companyHint(v, cat), blockId);
           return;
         }
         const ci = Object.keys(legal).find((k) => k.toLowerCase() === v.toLowerCase());
@@ -320,7 +314,7 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
     const isNorwegianWell = r.attrs.Country === 'NO' && r.attrs.SiteType === 'WELL';
     if (isNorwegianWell) {
       const s = suggestWell(name, cat);
-      add('S01', `"${name}" is not in the Sodir wellbore list of the catalogue.`, line, s ? `Did you mean ${s}?` : 'Use the compact wellbore name, e.g. 6407/7-A-18 H or 15/9-19 SR2. A newer catalogue may contain recent wells.', r.block);
+      add('S01', `"${name}" is not in ${wellList}.`, line, s ? `Did you mean ${s}?` : 'Use the compact wellbore name, e.g. 6407/7-A-18 H or 15/9-19 SR2.', r.block);
     } else if (!hasCoords) {
       add('S02', `Site "${name}" is not a registered Norwegian well and has no SSLatitude/SSLongitude.`, line, 'Coordinates are seconds of arc: degrees*3600 + minutes*60 + seconds.', r.block);
     }
@@ -463,6 +457,19 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
   const counts = { error: 0, warning: 0, info: 0 };
   for (const i of out) counts[i.severity]++;
   return { issues: out, counts };
+}
+
+/** Hint for a company name that is not on the approved list: exact spelling, or names that contain it. */
+export function companyHint(v: string, cat: Catalogue): string | undefined {
+  const names = Object.keys(cat.lookups[LOOKUP.Company] ?? {});
+  const up = v.toUpperCase().trim();
+  const exact = names.find((n) => n.toUpperCase() === up);
+  if (exact) return `Write it exactly as on the list: ${exact}`;
+  const words = up.split(/[^A-ZÆØÅ0-9]+/).filter((w) => w.length >= 3);
+  const hits = names.filter((n) => words.length && words.every((w) => n.toUpperCase().includes(w))).slice(0, 4);
+  if (hits.length) return `Approved names include: ${hits.join(', ')}`;
+  const s = suggest(v, names, 2);
+  return s ? `Did you mean ${s}?` : undefined;
 }
 
 function suggestHint(v: string, list: string[]): string | undefined {

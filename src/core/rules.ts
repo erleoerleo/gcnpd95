@@ -80,10 +80,10 @@ export const RULES: RuleDef[] = [
   R('D09', 'dictionary', 'error', 'Keywords and codes are case-sensitive'),
   R('D10', 'dictionary', 'info', 'UNKNOWN is accepted for historical data only'),
   R('D11', 'dictionary', 'error', 'Dictionary must be GC-DIC-V2'),
-  R('S01', 'sodir', 'error', 'Norwegian well name not found in the Sodir wellbore list', 'warning'),
+  R('S01', 'sodir', 'error', 'Norwegian well name not in the approved wellbore list', 'warning'),
   R('S02', 'sodir', 'warning', 'Site not in the wellbore list should have coordinates', 'info'),
-  R('S03', 'sodir', 'error', 'Sender/Recipient is not a company code from the catalogue', 'warning'),
-  R('S04', 'sodir', 'warning', 'Company/laboratory is not a catalogue code (full official name expected)', 'info'),
+  R('S03', 'sodir', 'error', 'Sender/Recipient not in the approved company list', 'warning'),
+  R('S04', 'sodir', 'error', 'Company or laboratory not in the approved company list', 'warning'),
   R('S05', 'sodir', 'error', 'SiteName UNKNOWN is only legal for reference samples', 'warning'),
   R('S06', 'sodir', 'info', 'Files reported to Sodir should be named GCH_RAW.ASC', 'info'),
 ];

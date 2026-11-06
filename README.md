@@ -9,9 +9,10 @@ on GitHub Pages or any static host.
 
 ## What it does
 
-- **Validation** against the format specification (`spesifikasjon-eng.pdf`) and the GC-DIC-V2
-  data dictionary (`katalogfil.xls`), with two profiles:
-  - **Sodir (Norway)**: every rule, including the Sodir wellbore list and company codes.
+- **Validation** against the format specification (`data/spesifikasjon-eng.pdf`), the GC-DIC-V2
+  data dictionary (`data/katalogfil.xls`) and Sodir's approved lists of wellbore names
+  (`data/wellbores.txt`) and companies (`data/companies.txt`), with two profiles:
+  - **Sodir (Norway)**: every rule, including the approved wellbore and company lists.
   - **Generic**: the same format, data model and dictionary checks, but well names and company
     codes become warnings. Use it for files from other countries that follow GC-NPD-95.
 - Every problem has a rule code, a line number and, where it is clear, a suggested fix
@@ -28,8 +29,8 @@ on GitHub Pages or any static host.
   names, numeric values as numbers and units from the dictionary. Records whose parent is
   missing are kept under `unlinked`. *Flat* has one object per result with its full context.
   Validation results can be included.
-- **Catalogue**: the bundled catalogue is built from `katalogfil.xls`. A newer catalogue
-  (.xls or .xlsx) can be loaded in the app; it is remembered in that browser.
+- **Catalogue**: newer versions of the dictionary (.xls or .xlsx) and of the approved lists (.txt)
+  can be loaded in the app under *Catalogue*; they are remembered in that browser.
 
 All three ways of naming parameters are supported: explicit (`L0,ParamName`), implicit, and
 simplified implicit, as well as multi-line records (L1–L9), Detector/PeakProperty context,
@@ -67,24 +68,29 @@ The build uses relative paths, so it works at `https://<user>.github.io/<repo>/`
 other static host (Azure Static Web Apps, Netlify, an internal web server). No server-side
 code or libraries are needed.
 
-## Update the catalogue
+## Update the approved lists and the dictionary
 
-When Sodir publishes a new catalogue, replace `katalogfil.xls` and run:
+**Wellbores and companies.** `data/wellbores.txt` and `data/companies.txt` hold one name per line
+and are read directly when the site is built. Replace or edit them (also fine in the GitHub web
+editor) and push; the site redeploys with the new lists. Names must match exactly, including
+case and spacing (`6407/7-A-18 H`, `EQUINOR ENERGY AS`).
+
+**Dictionary.** When Sodir publishes a new GC-DIC-V2 workbook, replace `data/katalogfil.xls` and run:
 
 ```bash
-npm run catalogue                        # reads ./katalogfil.xls
+npm run catalogue                        # reads data/katalogfil.xls
 npm run catalogue -- path/to/newer.xlsx  # or any other path
 ```
 
-This rewrites `src/data/catalogue.json`, which is bundled into the site.
-Users can also load a newer catalogue directly in the app without rebuilding.
+This rewrites `src/data/catalogue.json` (parameter names, units, codes). The approved lists
+always take precedence over the wellbore and company tables inside the workbook.
 
 ## Validation rules
 
 Codes starting with **F** are physical format rules (spec chapter 4), **M** data model and
 integrity rules (chapter 2 and the AttributeRule sheet), **D** dictionary rules (legal names,
-codes, numeric ranges, lithology syntax), and **S** Sodir reporting rules (wellbore list,
-company codes, `GCH_RAW.ASC` file name). The full list with severities per profile is in the
+codes, numeric ranges, lithology syntax), and **S** Sodir reporting rules (approved wellbore
+and company lists, `GCH_RAW.ASC` file name). The full list with severities per profile is in the
 app under *Validation → All checks*, and in `src/core/rules.ts`.
 
 This tool follows the published specification and dictionary closely, but it is not Sodir's
@@ -94,6 +100,7 @@ official validator. Run the official validator before submitting.
 
 ```
 src/core/catalogue.ts   catalogue model and converter from the Excel workbook
+src/core/lists.ts       approved wellbore/company lists (data/*.txt) applied to the catalogue
 src/core/parser.ts      tokenizer and block parser, builds sites/samples/fractions/analyses/results
 src/core/validator.ts   all validation rules
 src/core/rules.ts       rule codes, titles and severities per profile
@@ -104,5 +111,6 @@ src/core/chartdata.ts   data preparation for charts
 src/ui/                 React components
 scripts/                catalogue builder and command-line validator
 test/                   Vitest tests
+data/                   Sodir documents, the dictionary workbook and the approved lists
 public/eksempelfil.txt  Sodir's annotated example file, used by "Open Sodir example file"
 ```

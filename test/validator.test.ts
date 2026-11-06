@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import catJson from '../src/data/catalogue.json';
-import type { Catalogue } from '../src/core/catalogue';
+import { DEFAULT_CATALOGUE } from '../src/core/defaultCatalogue';
 import { decodeBytes, parseGcNpd95, splitRecord } from '../src/core/parser';
 import { validate, checkLithology } from '../src/core/validator';
 import { flatRows, toDelimited } from '../src/core/flatten';
 import { toJson } from '../src/core/json';
+import { parseList, withLists } from '../src/core/lists';
 
-const cat = catJson as unknown as Catalogue;
+const cat = DEFAULT_CATALOGUE;
 const example = decodeBytes(readFileSync(new URL('../public/eksempelfil.txt', import.meta.url))).text.replace(/\r\n/g, '\n');
 
 const run = (text: string, profile: 'sodir' | 'generic' = 'sodir', name = 'GCH_RAW.ASC') => {
@@ -168,5 +168,31 @@ describe('json export', () => {
     const j = toJson(pf, cat, { layout: 'flat', validation: false }) as any;
     expect(j.results).toHaveLength(pf.params.length);
     expect(j.results[0].SiteName).toBe('6407/7-A-18 H');
+  });
+});
+
+describe('approved lists', () => {
+  it('uses data/wellbores.txt and data/companies.txt', () => {
+    expect(cat.sources).toEqual({ wellbores: 'data/wellbores.txt', companies: 'data/companies.txt' });
+    expect(Object.keys(cat.lookups['11']).length).toBeGreaterThan(8000);
+    expect(Object.keys(cat.lookups['3']).length).toBeGreaterThan(1000);
+  });
+  it('accepts a well that is only in the approved list', () => {
+    const recent = Object.keys(cat.lookups['11']).find((w) => w.startsWith('6406/') && !example.includes(w))!;
+    expect(codes(sub('6407/7-A-18 H', recent))).not.toContain('S01');
+  });
+  it('rejects an unapproved laboratory and suggests approved names', () => {
+    const r = run(sub('04,F10101-01,10101-01A21,RE,A,GEOLABNOR', '04,F10101-01,10101-01A21,RE,A,Equinor'));
+    const i = r.issues.find((x) => x.code === 'S04')!;
+    expect(i.severity).toBe('error');
+    expect(i.hint).toContain('EQUINOR ASA');
+    expect(run(sub('04,F10101-01,10101-01A21,RE,A,GEOLABNOR', '04,F10101-01,10101-01A21,RE,A,Equinor'), 'generic').issues.find((x) => x.code === 'S04')!.severity).toBe('warning');
+  });
+  it('parses lists with BOM, CRLF, blanks and duplicates', () => {
+    expect(parseList('﻿A\r\n\r\n B \nA\n')).toEqual(['A', 'B']);
+    const c = withLists(cat, { wellbores: { names: ['X/1-1'], source: 'mine.txt' } });
+    expect(Object.keys(c.lookups['11'])).toEqual(['X/1-1']);
+    expect(c.sources?.wellbores).toBe('mine.txt');
+    expect(c.lookups['3']).toBe(cat.lookups['3']);
   });
 });

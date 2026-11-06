@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import bundledCatalogue from './data/catalogue.json';
 import { catalogueFromFile, LOOKUP, type Catalogue } from './core/catalogue';
+import { DEFAULT_CATALOGUE } from './core/defaultCatalogue';
+import { parseList, withLists } from './core/lists';
 import { decodeBytes, parseGcNpd95 } from './core/parser';
 import { validate } from './core/validator';
 import type { Profile } from './core/rules';
@@ -21,8 +22,9 @@ const TABS: [Tab, string][] = [
   ['export', 'Export'],
 ];
 
-const BUNDLED = bundledCatalogue as unknown as Catalogue;
-const LS_CATALOGUE = 'gcnpd95.catalogue';
+const BUNDLED = DEFAULT_CATALOGUE;
+// v2: catalogues saved before the approved wellbore/company lists were added are ignored
+const LS_CATALOGUE = 'gcnpd95.catalogue.v2';
 const LS_PROFILE = 'gcnpd95.profile';
 
 const store = {
@@ -103,15 +105,28 @@ export default function App() {
     openBytes('eksempelfil.txt', new Uint8Array(await res.arrayBuffer()));
   }, [openBytes]);
 
-  const loadCatalogue = async (f: File) => {
+  const loadCatalogue = async (kind: CatalogueKind, f: File) => {
     try {
-      const c = await catalogueFromFile(f);
+      let c: Catalogue;
+      let msg: string;
+      if (kind === 'dictionary') {
+        c = await catalogueFromFile(f);
+        // keep approved lists that were loaded separately
+        const keep = (k: 'wellbores' | 'companies', id: number) =>
+          catalogue.sources?.[k] ? { names: Object.keys(catalogue.lookups[id] ?? {}), source: catalogue.sources[k]! } : undefined;
+        c = withLists(c, { wellbores: keep('wellbores', LOOKUP.SiteName), companies: keep('companies', LOOKUP.Company) });
+        msg = `Dictionary loaded: ${Object.keys(c.parameters).length} parameters.`;
+      } else {
+        const names = parseList(await f.text());
+        if (names.length < 10) throw new Error(`only ${names.length} names found; expected one name per line`);
+        c = withLists(catalogue, { [kind]: { names, source: f.name } });
+        msg = `${kind === 'wellbores' ? 'Wellbore' : 'Company'} list loaded: ${names.length.toLocaleString()} names.`;
+      }
       setCatalogue(c);
       store.set(LS_CATALOGUE, JSON.stringify(c));
-      setToast(`Catalogue loaded: ${Object.keys(c.parameters).length} parameters, ${Object.keys(c.lookups[LOOKUP.SiteName] ?? {}).length} site names.`);
-      setCatOpen(false);
+      setToast(msg);
     } catch (e) {
-      setToast(`Could not read the catalogue: ${(e as Error).message}`);
+      setToast(`Could not read ${f.name}: ${(e as Error).message}`);
     }
   };
 
@@ -185,13 +200,13 @@ export default function App() {
         {catOpen && (
           <CataloguePanel
             catalogue={catalogue}
-            isBundled={catalogue === BUNDLED || catalogue.source === BUNDLED.source}
+            isBundled={catalogue === BUNDLED}
             onLoad={loadCatalogue}
             onReset={() => {
               setCatalogue(BUNDLED);
               store.set(LS_CATALOGUE, null);
               setCatOpen(false);
-              setToast('Using the bundled catalogue.');
+              setToast('Using the dictionary and lists bundled with the site.');
             }}
             onClose={() => setCatOpen(false)}
           />
@@ -228,47 +243,57 @@ export default function App() {
   );
 }
 
+type CatalogueKind = 'dictionary' | 'wellbores' | 'companies';
+
 function CataloguePanel(props: {
   catalogue: Catalogue;
   isBundled: boolean;
-  onLoad: (f: File) => void;
+  onLoad: (kind: CatalogueKind, f: File) => void;
   onReset: () => void;
   onClose: () => void;
 }) {
   const c = props.catalogue;
   const input = useRef<HTMLInputElement>(null);
+  const [kind, setKind] = useState<CatalogueKind>('dictionary');
+  const pick = (k: CatalogueKind) => {
+    setKind(k);
+    if (input.current) {
+      input.current.accept = k === 'dictionary' ? '.xls,.xlsx' : '.txt,text/plain';
+      input.current.click();
+    }
+  };
+  const count = (id: number) => Object.keys(c.lookups[id] ?? {}).length.toLocaleString();
   return (
     <section className="catalogue-panel" aria-label="Catalogue">
-      <h3>Data dictionary</h3>
+      <h3>Dictionary and approved lists</h3>
       <p style={{ margin: 0, color: 'var(--muted)' }}>
-        Legal names and codes come from the GC-DIC-V2 catalogue (katalogfil). Load a newer workbook from Sodir to validate against
-        recent wells and codes. It is kept in this browser until you reset it.
+        Codes and parameter names come from the GC-DIC-V2 dictionary (katalogfil). Well names and companies are checked against
+        Sodir's approved lists. Files you load here are kept in this browser until you reset.
       </p>
       <dl>
-        <dt>Source</dt>
-        <dd>{c.source}{props.isBundled ? ' (bundled)' : ''}</dd>
         <dt>Dictionary</dt>
-        <dd>{c.dictionaryNames.join(', ')}</dd>
-        <dt>Parameters</dt>
-        <dd>{Object.keys(c.parameters).length.toLocaleString()}</dd>
+        <dd>{c.source}, {Object.keys(c.parameters).length.toLocaleString()} parameters</dd>
         <dt>Wellbores</dt>
-        <dd>{Object.keys(c.lookups[LOOKUP.SiteName] ?? {}).length.toLocaleString()}</dd>
+        <dd>{count(LOOKUP.SiteName)} from {c.sources?.wellbores ?? c.source}</dd>
         <dt>Companies</dt>
-        <dd>{Object.keys(c.lookups[LOOKUP.Company] ?? {}).length.toLocaleString()}</dd>
+        <dd>{count(LOOKUP.Company)} from {c.sources?.companies ?? c.source}</dd>
       </dl>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button className="btn primary" onClick={() => input.current?.click()}>Load katalogfil (.xls, .xlsx)</button>
-        {!props.isBundled && <button className="btn" onClick={props.onReset}>Use bundled</button>}
+        <button className="btn" onClick={() => pick('wellbores')}>Load wellbore list (.txt)</button>
+        <button className="btn" onClick={() => pick('companies')}>Load company list (.txt)</button>
+        <button className="btn" onClick={() => pick('dictionary')}>Load katalogfil (.xls, .xlsx)</button>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+        {!props.isBundled && <button className="btn" onClick={props.onReset}>Use the bundled versions</button>}
         <button className="btn ghost" onClick={props.onClose}>Close</button>
       </div>
       <input
         ref={input}
         type="file"
-        accept=".xls,.xlsx"
         className="visually-hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) props.onLoad(f);
+          if (f) props.onLoad(kind, f);
           e.target.value = '';
         }}
       />
