@@ -5,7 +5,7 @@ GC-NPD-95 v2.0 format, the format Sodir (Norwegian Offshore Directorate) require
 geochemical data sent to the Diskos database.
 
 Everything runs in the browser. Files are never uploaded anywhere, so the app can be hosted
-on GitHub Pages or any static host.
+on any static web server, such as gcnpd95.no.
 
 ## What it does
 
@@ -70,17 +70,50 @@ npm run validate -- lab_report.txt --fix      # writes a corrected GCH_RAW.ASC n
 `--fix` applies only the fixes that have one right answer and lists name corrections with
 several candidates, so you can choose those in the app.
 
-## Deploy to GitHub Pages
+## Deploy to gcnpd95.no (own server)
 
-1. Move `deploy.yml` to `.github/workflows/deploy.yml` (on Windows:
-   `mkdir .github\workflows` then `move deploy.yml .github\workflows\`).
-1. Push this folder to a GitHub repository (branch `main`).
-1. In the repository, open **Settings → Pages** and set **Source** to **GitHub Actions**.
-1. The workflow in `.github/workflows/deploy.yml` tests, builds and publishes on every push to `main`.
+The site is static files, so any web server can host it. The workflow in
+`.github/workflows/deploy.yml` tests and builds on every push to `main`, then copies `dist/` to
+`/var/www/gcnpd95` on the server with rsync over SSH. The copy step is skipped until the
+repository secrets below exist.
 
-The build uses relative paths, so it works at `https://<user>.github.io/<repo>/` and on any
-other static host (Azure Static Web Apps, Netlify, an internal web server). No server-side
-code or libraries are needed.
+**Domain and DNS (Domeneshop).** Register `gcnpd95.no` (private individuals need a Norid PID,
+companies an organisation number). Add A records for `gcnpd95.no` and `www.gcnpd95.no` with the
+server's public IP. If the IP can change (home connection), install `deploy/domeneshop-dyndns.sh`
+and run it every 5 minutes from cron instead; it uses Domeneshop's DynDNS API.
+
+**Server (Ubuntu, nginx).** Once:
+
+```bash
+sudo adduser --disabled-password --gecos "" deploy
+sudo mkdir -p /var/www/gcnpd95 && sudo chown deploy:deploy /var/www/gcnpd95
+sudo apt install -y rsync
+sudo cp deploy/nginx-gcnpd95.no.conf /etc/nginx/sites-available/gcnpd95.no
+sudo ln -s /etc/nginx/sites-available/gcnpd95.no /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d gcnpd95.no -d www.gcnpd95.no
+```
+
+Ports 80 and 443 must reach the server. Using Caddy instead of nginx: add `deploy/Caddyfile`
+to the Caddy config; it handles the certificate itself.
+
+**Deploy key and secrets.** Create a key pair that may only log in as `deploy`:
+
+```bash
+ssh-keygen -t ed25519 -N "" -C "github-actions gcnpd95" -f gcnpd95_deploy
+sudo -u deploy mkdir -p -m 700 /home/deploy/.ssh
+cat gcnpd95_deploy.pub | sudo -u deploy tee -a /home/deploy/.ssh/authorized_keys
+ssh-keyscan -p 22 <server-host>      # output = DEPLOY_KNOWN_HOSTS
+```
+
+In GitHub: Settings → Secrets and variables → Actions → New repository secret:
+`DEPLOY_HOST` (server host name or IP), `DEPLOY_USER` (`deploy`), `DEPLOY_KEY` (contents of
+`gcnpd95_deploy`), `DEPLOY_KNOWN_HOSTS`, and `DEPLOY_PORT` if SSH does not use port 22.
+Then re-run the workflow from the Actions tab, or push.
+
+**Privacy by design.** Fonts are bundled with the site, and both the nginx and Caddy configs send a
+Content-Security-Policy (`deploy/csp.txt`) with `connect-src 'self'`: the browser blocks any attempt
+by the page to send data to another server. `npm run preview` serves the build with the same policy.
 
 ## Update the approved lists and the dictionary
 

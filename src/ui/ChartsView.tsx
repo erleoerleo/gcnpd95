@@ -173,7 +173,7 @@ function labelPlugin(t: Theme, labels: { x: number; y: number; text: string }[])
     afterDatasetsDraw(chart: import('chart.js').Chart) {
       const { ctx, scales, chartArea } = chart;
       ctx.save();
-      ctx.font = "11px 'Archivo', system-ui, sans-serif";
+      ctx.font = "11px 'Archivo Variable', system-ui, sans-serif";
       ctx.fillStyle = t.muted;
       ctx.textBaseline = 'bottom';
       const drawn: { x0: number; x1: number; y0: number; y1: number }[] = [];
@@ -523,7 +523,7 @@ function peakLabels(t: Theme, apexes: { x: number; y: number; base: number; name
     afterDatasetsDraw(chart: import('chart.js').Chart) {
       const { ctx, scales, chartArea } = chart;
       ctx.save();
-      ctx.font = "10.5px 'Archivo', system-ui, sans-serif";
+      ctx.font = "10.5px 'Archivo Variable', system-ui, sans-serif";
       ctx.fillStyle = t.ink;
       ctx.textBaseline = 'middle';
       const used: { x: number; y0: number; y1: number }[] = [];

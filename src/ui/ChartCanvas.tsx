@@ -72,7 +72,7 @@ export function ChartCanvas(props: { config: ChartConfiguration; label: string; 
 }
 
 export function baseOptions(t: Theme) {
-  Chart.defaults.font.family = "'Archivo', system-ui, sans-serif";
+  Chart.defaults.font.family = "'Archivo Variable', system-ui, sans-serif";
   Chart.defaults.font.size = 12;
   Chart.defaults.color = t.muted;
   return {
