@@ -1,0 +1,586 @@
+// FILE DEFINITION BLOCK: Always in fixed (column-bound) format. All other data 
+// blocks are in character-separated format.
+//..:....1....:....2....:....3....:....4....:....5....:....6....:....7....:....8
+// The next four lines should always be placed first in the File Definition Block.
+Format         GC-NPD-95
+Version        2.0
+Dictionary     GC-DIC-V2
+Delimiter      COMMA
+TransferID     9501051728
+DTJStatus      N
+TransferDate   15.06.1995
+Sender         STATOIL
+Contact Ola Normann
+Recipient      OD
+-----
+// Record Definition Block 01
+// A record definition block shall contain the data attributes belonging to 
+// one level in the logical data model. This first record definition block 
+// define the sample sites included in this transfer
+00,DEFINE BLOCK,01,Sample Site (Well/Outcrop) data
+L1,TransferID
+// TransferID and SiteID are pointers that trace the hierarchy in the data model
+// Therefore SiteID, for example, is mandatory also in the next level (block 02) 
+// in order to trace the samples to their respective sample sites 
+L1,SiteID
+L1,Country
+L1,SiteType
+L1,SiteName
+L1,DatumName
+L1,DatumElevation
+L1,SSLatitude
+L1,SSLongitude 
+L1,SSComments
+// A data block (file definition, record definition, or value assignment) is 
+// terminated by a line containing 5 consecutive hyphens
+-----
+// Value Assignment Block 01
+// Each Record definition block has exactly one corresponding value assignment 
+// block. This first value assignment block assigns values to the 
+// data attributes for sample sites included in this transfer
+01,9501051728,W101,NO,WELL,6407/07-A-18H,RKB,26.25,,,"turbodrilled 4000m-TD"
+01,9501051728,W102,NO,WELL,1/9-6 SR,RKB,24.35,,,""
+// Site definitions for Norwegian Geochemical Standard (NGS) samples for control 
+// analyses are represented in the next three Record Definition Lines. 
+// Correct reporting of coordinates for sample sites without officially 
+// registered position is illustrated by the NGS SR-1 sample, which has 
+// geographical coordinates 78 20 00 N, 18 58 34 E. (See Data Dictionary for a
+// full explanation of the calculations)
+01,9501051728,W991,NO,UNKNOWN,UNKNOWN,MSL,,282000,68314,NGS Rock Sample SR-1
+01,9501051728,W992,GB,UNKNOWN,UNKNOWN,MSL,,,,NGS Rock Sample JR-1
+01,9501051728,W993,NO,UNKNOWN,UNKNOWN,RKB,,,,NGS Oil Sample NSO-1
+
+// Note that missing SSLatitude and SSLongitude for sites without officially 
+// registered position currently is accepted by the GC-NPD-95 validator program.
+// This does NOT imply that correct position may be omitted for e.g. geochemical 
+// surface survey data!
+
+-----
+// Record definition block 02
+00,DEFINE BLOCK,02,Sample data
+L1,SiteID
+L1,SampleID
+L1,UDepth
+L1,LDepth
+L1,SampleType
+L1,LabRefNumber
+L1,OpRefNumber
+L1,SLithology
+L2,SLithologyFull
+L3,SComments
+-----
+
+// Note that empty lines can be inserted at any place in the file.
+
+// Value assignment block 02
+// Samples included in this transfer
+02,W101,10100,1234.00,1237.00,DC,90001,S28359,CLYST/SST
+L2,"80% Claystone, dkgy, laminated; 20% Sandstone, lt gy, fine-grained"
+L3,"Poorly washed sample
+
+02,W101,10101,1250.00,1255.00,DC,90002,S28360,CLYST/SST
+L2,"95% Claystone, dk-med gy; 5% Sandstone, lt gy fine-grained"
+L3,
+
+// Note that ALL rock samples MUST have a sample lithology; if not determined,
+// use UNKNOWN.
+02,W101,10102,1250.00,1255.00,DCG,90003,S28361,UNKNOWN
+L3,"Canned sample: can damaged, some gas could have leaked out"
+
+02,W102,10200,1567.23,1567.23,SWC,78665,S28365,CLYST
+L2,"Claystone, med gy"
+
+02,W102,10201,2080.5,2080.5,OIL,78665,RFT
+L3,"RFT contained 300 ml oil, 250 ml water"
+02,W102,10202,2063,2095,OIL,K2784,"DST #1, Separator"
+02,W102,10203,2063,2095,GAS,K2787,"DST #1, Bottle A86349"
+
+// NGS reference samples: Note that depth can be UNKNOWN.
+02,W991,99101,UNKNOWN,UNKNOWN,OC,H1234,"NGS SR-1, Aliquot # 17",CLYST
+02,W992,99201,UNKNOWN,UNKNOWN,OC,H1236,"NGS JR-1, Aliquot # 23",CLYST
+02,W993,99301,UNKNOWN,UNKNOWN,OIL,H1235,"NGS NSO-1, Aliquot # 2"
+-----
+// Record definition block 03
+00,DEFINE BLOCK,03,Fraction data
+L1,SampleID
+L1,FractionID
+L1,FracRefnumber
+L1,FractionType
+L1,FLithology
+L1,FComments
+-----
+// Value assignment block 03
+// Fractions included in this transfer
+// Fractions for well W101
+03,10100,F10100-01,90001-01,SDUN,CLYST,
+03,10100,F10100-02,90001-02,SDUN,SST,"Unextracted sandstone, stained?"
+03,10100,F10100-03,90001-03,SDEX,CLYST,
+03,10100,F10100-04,90001-04,EXTR,CLYST,
+03,10100,F10100-05,90001-05,EHEX,CLYST,
+03,10100,F10100-06,90001-06,EASP,CLYST,
+03,10100,F10100-07,90001-07,EPOL,CLYST,
+03,10100,F10100-08,90001-08,EARO,CLYST,
+03,10100,F10100-09,90001-09,ESAT,CLYST,
+03,10100,F10100-10,90001-10,PBWR,CLYST,
+03,10100,F10100-11,90001-11,SDPX,CLYST,
+03,10100,F10100-12,90001-12,SDEX,SST,Extracted sandstone
+
+03,10109,F10101-01,90002-01,SDUN,CLYST,
+03,10101,F10101-02,90002-02,SDUN,SST,
+
+// Fraction definition data continued ...
+03,10102,F10102-01,90003-01,GSHS,BULK,
+03,10102,F10102-02,90003-02,GSOC,BULK,
+03,10102,F10102-03,90003-03,GSHO,BULK,
+
+// Fractions for well W102
+03,10200,F10200-01,78665-01,SDUN,BULK
+03,10200,F10200-02,78665-02,PBWR,BULK
+03,10200,F10200-03,78665-03,SLKT,BULK
+03,10200,F10200-04,78665-04,SDUN,CLYST (DK GY)
+03,10200,F10200-05,78665-05,SDUN,CLYST (LT GY)
+
+03,10201,F10201-01,78667-01,BULK,
+
+03,10202,F10202-01,K2784-01,BULK,
+03,10202,F10202-02,K2784-02,OTOP,
+03,10202,F10202-03,K2784-03,OHEX,
+03,10202,F10202-04,K2784-04,OASP,
+03,10202,F10202-05,K2784-05,OPOL,
+03,10202,F10202-06,K2784-06,OARO,
+03,10202,F10202-07,K2784-07,OSAT,
+
+03,10203,F10203-01,K2787-01,BULK,,-> gas analysis
+
+// Fractions for NGS reference samples
+// NGS SR-1
+03,99101,F99101-01,H1234-01,SDUN,BULK
+// NGS JR-1
+03,99201,F99201-01,H1236-01,SDUN,BULK
+// NGS NSO-1
+03,99301,F99301-01,H1235-01,BULK
+03,99301,F99301-02,K1235-02,OTOP
+03,99301,F99301-03,K1235-03,OHEX
+03,99301,F99301-04,K1235-04,OASP
+03,99301,F99301-05,K1235-05,OPOL
+03,99301,F99301-06,K1235-06,OARO
+03,99301,F99301-07,K1235-07,OSAT
+03,99301,F99301-12,K1235-12,OTOP
+03,99301,F99301-13,K1235-13,OHEX
+03,99301,F99301-14,K1235-14,OASP
+03,99301,F99301-15,K1235-15,OPOL
+03,99301,F99301-16,K1235-16,OARO
+03,99301,F99301-17,K1235-17,OSAT
+-----
+
+// Record definition block 04
+00,DEFINE BLOCK,04,Analysis
+L1,FractionID
+L1,AnalID
+L1,AnalType
+L1,ADescription
+L1,ALaboratory
+L1,AInstrument
+L1,AMethod
+L1,AComments
+-----
+// Value assignment block 04
+// Analyses included in this transfer
+04,F10100-01,10100-01A01,RE,A,GEOLABNOR,Rock-Eval 6,"Calibrated against IFP standard 55000, Temp.Progr. 280°C(2 min.)-25°C/min-600°C, Oxidation temp. 900°C",Comments on the analytical procedure are placed here.
+// Note that long records, such as the first record in this block, may be formatted (wrapped) over several lines by your text editor.
+04,F10100-01,10100-01A02,BULKHC,A,GEOLABNOR,,,
+04,F10100-04,10100-04A04,ISOT,A,IFE,,,
+04,F10100-06,10100-06A05,ISOT,A,IFE,,,
+04,F10100-07,10100-07A06,ISOT,A,IFE,,,
+04,F10100-08,10100-08A07,ISOT,A,IFE,,,
+04,F10100-08,10100-08A08,GC,A,GEOLABNOR,,,
+04,F10100-08,10100-08A09,GC,A,GEOLABNOR,,,
+04,F10100-09,10100-09A10,ISOT,A,IFE,,,
+04,F10100-09,10100-09A11,GC,A,GEOLABNOR,,,
+04,F10100-09,10100-09A12,GC,A,GEOLABNOR,,,
+04,F10100-10,10100-10A13,VR,A,GEOOPTICS,,,
+04,F10100-11,10100-11A03,GC,A,GEOLABNOR,,,
+04,F10100-02,10100-02A14,RE,A,GEOLABNOR,,,
+04,F10100-12,10100-12A15,RE,A,GEOLABNOR,,,
+04,F10101-01,10101-01A21,RE,A,GEOLABNOR,,,
+04,F10101-02,10101-02A22,RE,A,GEOLABNOR,,,
+04,F10102-01,10102-01A23,GC,A,GEOLABNOR,,,
+04,F10102-02,10102-02A24,GC,A,GEOLABNOR,,,
+04,F10102-03,10102-03A25,GC,A,GEOLABNOR,,,
+
+// Analyses of well W102
+04,F10200-01,10200-01A31,RE,A,GEOLABNOR,,,
+04,F10200-02,10200-02A32,VR,A,GEOOPTICS,,,
+04,F10200-02,10200-02A33,VR,A,GEOOPTICS,,,
+04,F10200-03,10200-03A34,VK,A,GEOLABNOR,,,
+04,F10200-04,10200-04A35,RE,A,GEOLABNOR,,,
+04,F10200-05,10200-05A36,RE,A,GEOLABNOR,,,
+04,F10201-01,10201-01A41,GC,A,GEOLABNOR,,,
+04,F10202-01,10202-01A51,PHYS,A,GEOLABNOR,,,
+04,F10202-01,10202-01A52,GC,A,GEOLABNOR,,,
+04,F10202-02,10202-02A53,PHYS,A,GEOLABNOR,,,
+04,F10202-02,10202-02A54,BULKHC,A,GEOLABNOR,,,
+04,F10202-04,10202-04A55,ISOT,A,IFE,,,
+04,F10202-05,10202-05A56,ISOT,A,IFE,,,
+04,F10202-06,10202-06A57,ISOT,A,IFE,,,
+04,F10202-07,10202-07A58,ISOT,A,IFE,,,
+04,F10202-07,10202-07A59,GC,A,GEOLABNOR,,,
+04,F10202-07,10202-07A60,GC,A,GEOLABNOR,,,
+04,F10202-07,10202-07A61,GC,A,GEOLABNOR,,,
+04,F10203-01,10203-01A71,GC,A,GEOLABNOR,,,
+04,F10203-01,10203-01A72,ISOT,A,IFE,,,
+// Analyses of NGS reference samples
+// NGS SR-1
+04,F99101-01,99101-01A01,RE,S,GEOLABNOR,,,
+04,F99101-01,99101-01A02,RE,S,GEOLABNOR,,,
+
+// NGS JR-1
+04,F99201-01,99201-01A01,RE,S,GEOLABNOR,,,
+04,F99201-01,99201-02A02,GC,S,GEOLABNOR,,,
+
+// NGS NSO-1
+04,F99301-01,99301-01A01,PHYS,S,GEOLABNOR,,,
+04,F99301-01,99301-01A02,GC,S,GEOLABNOR,,,
+04,F99301-01,99301-01A21,PHYS,S,GEOLABNOR,,,
+04,F99301-01,99301-01A22,GC,S,GEOLABNOR,,,
+04,F99301-02,99301-01A03,PHYS,S,GEOLABNOR,,,
+04,F99301-02,99301-02A04,BULKHC,S,GEOLABNOR,,,
+04,F99301-04,99301-04A05,ISOT,S,IFE,,,
+04,F99301-05,99301-05A06,ISOT,S,IFE,,,
+04,F99301-06,99301-06A07,ISOT,S,IFE,,,
+04,F99301-07,99301-07A08,ISOT,S,IFE,,,
+04,F99301-07,99301-07A09,GC,S,GEOLABNOR,,,
+04,F99301-07,99301-07A10,GC,S,GEOLABNOR,,,
+04,F99301-12,99301-01A23,PHYS,S,GEOLABNOR,,,
+04,F99301-12,99301-12A24,BULKHC,S,GEOLABNOR,,,
+04,F99301-14,99301-14A25,ISOT,S,IFE,,,
+04,F99301-15,99301-15A26,ISOT,S,IFE,,,
+04,F99301-16,99301-16A27,ISOT,S,IFE,,,
+04,F99301-17,99301-17A28,ISOT,S,IFE,,,
+04,F99301-17,99301-17A29,GC,S,GEOLABNOR,,,
+04,F99301-17,99301-17A30,GC,S,GEOLABNOR,,,
+-----
+// Below follow the analytical results ----------------
+
+// Record definition block 05
+00,DEFINE BLOCK,05,Rock Eval data
+// Here Method 1 (explicit) is used to define the parameter names 
+// (i.e. the L0 line defines where the ParamName is placed in the following 
+// Record Definition Lines). Avoid this format, if possible.
+L1,AnalID
+L0,ParamName
+L1,ParamValue,TOC
+L1,ParamValue,S1
+L1,ParamValue,S2
+L1,ParamValue,TMAX
+L1,ParamValue,PComments
+-----
+// Note the missing values (nothing or space)
+05,10100-01A01,3.36,0.25,12.92,432,TOC from RE
+05,10100-02A14,0.32,2.57,0.92,,"TOC from RE, TMAX missing"
+05,10100-12A15,0.25,0.01,0.85, ,"TOC from RE, TMAX missing"
+05,10101-01A21,2.27,0.38,9.85,434,TOC from RE
+05,10101-02A22,0.19,0.25,0.83,523,"TOC from RE, TMAX unreliable"
+05,10200-01A31,2.56,1.67,14.34,433,TOC from RE
+05,10200-04A35,5.76,2.79,18.53,432,TOC from RE
+05,10200-05A36,1.98,1.64,9.13,436,TOC from RE
+-----
+00,DEFINE BLOCK,06,More Rock-Eval data
+// Here Method 2 is used to define the parameter names (no L0 line, ParamName 
+// directly placed in the following Record Definition Lines). This format is 
+// preferred.
+L1,AnalID
+L1,TOC
+L1,S1
+L1,S2
+L1,TMAX
+L1,PComments
+-----
+06,99101-01A01,2.27,1.05,12.92,435,TOC from RE
+06,99101-01A02,2.35,1.16,12.92,437,TOC from RE
+06,99201-01A01,11.81,6.76,68.54,431,TOC from RE
+-----
+00,DEFINE BLOCK,07,Topping and density results (= PHYS)
+// Here the parameter names are not defined/reported in the Record Definition 
+// Block, but in the Value Assignment Block, together with the respective 
+// parameter values.
+L1,AnalID
+L1,ParamName
+L1,ParamValue
+-----
+07,10202-01A51,C15plusWt,47.3
+07,10202-02A53,DENSITY,0.825
+07,10202-02A53,APIGRAV,40.0
+07,99301-01A01,C15plusWt,77.2
+07,99301-01A21,DENSITY,0.858
+07,99301-01A21,APIGRAV,32.6
+07,99301-01A03,C15plusWt,80.2
+07,99301-01A23,DENSITY,0.862
+07,99301-01A23,APIGRAV,33.3
+-----
+00,DEFINE BLOCK,08,Extraction - Separation of rock extract [BULKHC]
+L1,AnalID
+L1,TOCEM
+L1,ROCKWT
+L1,EOMWT
+-----
+08,10100-01A02,2.22,5.704,91.3
+-----
+00,DEFINE BLOCK,09,Extraction - Separation of rock extract [BULKHC]
+// AnalID in first record, analytical results in second record
+L1,AnalID
+L2,EOMPPM
+L2,ASPEOM
+L2,POLEOM
+L2,AROEOM
+L2,SATEOM
+-----
+09,10100-01A02
+L2,16000,27.5,13.2,37.8,21.5
+-----
+00,DEFINE BLOCK,10,Separation of oil [BULKHC]
+L1,AnalID
+L1,ASPEOM
+L1,POLEOM
+L1,AROEOM
+L1,SATEOM
+-----
+10,10202-02A54,17.4,18.7,27.6,36.3
+10,99301-02A04,2.5,7.4,42.3,47.8
+10,99301-12A24,1.9,6.1,38.7,53.3
+-----
+00,DEFINE BLOCK,11,Isotope data from EOM or oil fractions (ISOT)
+L1,AnalID
+L1,d13C
+-----
+11,10100-04A04,"-32,3"
+11,10100-06A05,-28.9
+11,10100-07A06,-29.4
+11,10100-08A07,-26.6
+11,10100-09A10,-31.5
+11,10202-04A55,-27.3
+11,10202-05A56,-28.9
+11,10202-06A57,-32.1
+11,10202-07A58,-30.6
+11,10203-01A72,-28.5
+11,99301-04A05,-27.3
+11,99301-05A06,-31.4
+11,99301-06A07,-29.3
+11,99301-07A08,-28.8
+11,99301-14A25,-27.2
+11,99301-15A26,-33.5
+11,99301-16A27,-31.9
+11,99301-17A28,-29.2
+-----
+00,DEFINE BLOCK,12,GC analysis of headspace and occluded gas [GC]
+L1,AnalID
+L1,Detector
+L1,PeakProperty
+L1,C1
+L1,C2
+L1,C3
+L1,iC4
+L1,nC4
+L1,C5plus
+-----
+12,10102-01A23,FID,CNCAREA,162537,2589,1368,672,937,162
+12,10102-02A24,FID,CNCAREA,5147,1846,1022,316,428,358
+12,10102-03A25,FID,CNCAREA,167684,4435,2390,988,1365,520
+-----
+00,DEFINE BLOCK,13,Pyrolysis-GC [GC]
+L1,AnalID
+L1,Detector
+L1,PeakProperty
+L1,C1_NoUCM
+L1,C2toC5_NoUCM
+L1,C6toC14_NoUCM
+L1,C15plus_NoUCM
+-----
+13,10100-11A03,,NORMAREA,3.95,28.40,51.79,15.87
+13,99201-02A02,FID,NORMAREA,2.80,22.92,49.60,24.69
+-----
+00,DEFINE BLOCK,14,GC analysis of whole oil [GC]
+// Here the values are reported in several records per analysis (L1 to L3)
+// In addition, the simplified format is used, where all parameter names are 
+// placed consecutively in the respective Record Definition Line. Note that 
+// Detector and PeakProperty must be defined/repeated at the beginning of each 
+// new record.
+L1,AnalID,Detector,PeakProperty,iC4,nC4,nC5,22DMC4,nC6,MCyC5
+L2,Detector,PeakProperty,Benzene,CyC6,2MC6,3MC6,c13DMCyC5,t13DMCyC5,t12DMCyC5
+L3,Detector,PeakProperty,nC7,MCyC6,Toluene,nC8,mpXylene
+-----
+14,10201-01A41,FID,AREA,0,145,16186,11791,18618,3411
+L2,FID,AREA,65183,4582121,24568,35182,116712,13468,1264
+L3,FID,AREA,7569,3366,4444,33333,216124
+
+14,10202-01A52,FID,AREA,0,249,11490,14383,19135,1597
+L2,FID,AREA,14543,3715575,13795,35555,175555,17555,1795
+L3,FID,AREA,6555,5731,5951,36425,157759
+
+14,99301-01A02,FID,AREA,0,434,11350,15314,23448,7961
+L2,FID,AREA,85454,4251465,32114,24789,164785,24500,2147
+L3,FID,AREA,5146,4974,5266,16916,493776
+
+14,99301-01A22,FID,AREA,0,451,17670,14569,11343,4647
+L2,FID,AREA,79211,1225493,18647,21160,144286,10907,1110
+L3,FID,AREA,4821,3411,4458,36789,234972
+-----
+00,DEFINE BLOCK,15,GC analysis of saturated hydrocarbons [GC]
+// In contrast to Block 14, all parameter values in Block 15 are placed in one 
+// single, long record
+L1,AnalID
+L1,Detector
+L1,PeakProperty
+L1,nC15
+L1,nC16
+L1,nC17
+L1,nC18
+L1,nC19
+L1,nC20
+L1,nC21
+L1,nC22
+L1,nC23
+L1,nC24
+L1,nC25
+L1,nC26
+L1,nC27
+L1,nC28
+L1,nC29
+L1,nC30
+L1,nC31
+L1,nC32
+L1,nC33
+L1,nC34
+L1,Pristane
+L1,Phytane
+-----
+15,10100-09A11,FID,CNCAREA,256.6,286.4,315.2,335.3,365.3,421.1,482.6,511.6,568.5,484.3,543.7,466.3,522.3,455.8,502.7,433.1,388.2,344.7,268.9,452.8,922.3,646.7
+
+15,10202-07A59,FID,CNCAREA,456.6,456.4,515.2,435.3,465.3,521.1,475.4,411.6,458.5,531.3,443.7,566.3,422.4,555.6,602.2,533.0,361.1,244.4,168.8,152.4,222.6,146.4
+
+15,99301-07A09,FID,CNCAREA,725.6,278.5,315.9,247.8,365.3,421.1,436.1,311.6,463.5,590.3,547.7,675.3,345.3,427.9,458.2,321.8,217.4,337.4,245.2,351.5,564.3,237.9
+
+15,99301-17A29,FID,CNCAREA,147.8,286.3,335.4,347.3,275.9,447.5,234.8,852.6,124.5,784.3,423.8,156.4,584.1,414.5,506.8,444.2,377.8,351.4,248.7,426.1,499.3,208.5
+-----
+00,DEFINE BLOCK,16,GCMS SAT [GC] Triterpanes (177) (peak height)
+L1,AnalID
+L1,Detector
+L1,PeakProperty
+L1,25nor28ab
+L1,25nor30ab
+-----
+16,10100-09A12,177,HEIGHT,0.00,0.00
+16,10202-07A60,177,HEIGHT,0.00,0.00
+16,99301-07A10,177,HEIGHT,0.00,0.00
+16,99301-17A30,177,HEIGHT,0.00,0.00
+-----
+00,DEFINE BLOCK,17,"GCMS SAT [GC] Triterpanes (191) and Steranes (217, 218) (peak height)"
+L1,AnalID
+L1,Detector,PeakProperty,233,243,253,244,263,27Ts
+L2,Detector,PeakProperty,27Tm,28ab,25nor30ab,29ab,29Ts,30D,29ba,30O
+L3,Detector,PeakProperty,30ab,30ba,30G,Detector,PeakProperty,31abS,31abR,32abS,32abR
+L4,Detector,PeakProperty,33abS,33abR,34abS,34abR,35abS,35abR,27dbS,27dbR
+L5,Detector,PeakProperty,27daR,27daS,27aaS,27bbR,27bbS,27aaR,28dbS,28dbR
+L6,Detector,PeakProperty,28daR,28daS,28aaS,28bbR,28bbS,28aaR,29dbS,29dbR
+L7,Detector,PeakProperty,29daR,29daS,29aaS,29bbR,29bbS,29aaR
+L8,Detector,PeakProperty,27bbR,27bbS,28bbR
+L9,Detector,PeakProperty,28bbS,29bbR,29bbS,30bbR,30bbS
+-----
+17,10100-09A12,191,HEIGHT,867258,522549,642600,241507,467728,362621
+L2,191,HEIGHT,1214562,553517,565259,0,1375815,990210,248064,637904
+L3,191,HEIGHT,456676,525851,394681,191,HEIGHT,642600,241507,467728,255351
+L4,191,HEIGHT,1375815,990210,248064,6379041,214562,553517,565259,0
+L5,217,HEIGHT,642600,241507,467728,642600,241507,467728,456676,525851
+L6,217,HEIGHT,522549,642600,241507,467728,362621,248064,6379041,214562
+L7,217,HEIGHT,241507,467728,255351,990210,248064,990210
+L8,218,HEIGHT,990210,248064,553517
+L9,218,HEIGHT,565259,1375815,990210,248064,248064
+
+17,10202-07A60,191,HEIGHT,877558,555539,735700,531507,377758,375751
+L2,191,HEIGHT,1543575,343517,575559,0,1375815,990510,538073,737903
+L3,191,HEIGHT,354677,575851,393781,191,HEIGHT,735700,531507,377758,538351
+L4,191,HEIGHT,1275415,995510,538073,7379031,513575,383517,575559,0
+L5,217,HEIGHT,734600,534507,377758,735700,531507,377758,357777,555851
+L6,217,HEIGHT,555539,745710,531507,775758,375751,538073,7379031,513575
+L7,217,HEIGHT,531546,347758,538351,370510,557519,990510
+L8,218,HEIGHT,990790,535073,383517
+L9,218,HEIGHT,572559,1345855,990510,538073,538073
+
+17,99301-07A10,191,HEIGHT,812258,575549,641600,240087,477528,362751
+L2,191,HEIGHT,1214562,563517,512359,0,1375815,994310,248058,631894
+L3,191,HEIGHT,456676,524851,394161,191,HEIGHT,642600,271797,457788,275351
+L4,191,HEIGHT,1345815,990840,247964,6374941,214117,168544,564849,0
+L5,217,HEIGHT,642600,241506,472528,642649,218507,116528,457976,545859
+L6,217,HEIGHT,522459,613600,241507,467928,362711,279064,6379041,212542
+L7,217,HEIGHT,244607,467488,255315,991710,251474,828210
+L8,218,HEIGHT,990210,278064,579517
+L9,218,HEIGHT,565279,1377915,985210,245714,218184
+
+17,99301-17A30,191,HEIGHT,867258,522549,642600,241587,467728,362621
+L2,191,HEIGHT,1674562,843517,565159,0,1374825,998210,248064,637904
+L3,191,HEIGHT,456676,528451,379681,191,HEIGHT,642600,241177,467728,255351
+L4,191,HEIGHT,1374865,990284,248064,6379044,279162,553517,565259,0
+L5,217,HEIGHT,642600,241507,467718,642480,241507,467728,456676,525851
+L6,217,HEIGHT,245548,497828,456676,548851,553517,565179,0,990210
+L7,217,HEIGHT,214707,484728,272351,990210,244464,990470
+L8,218,HEIGHT,990267,248844,557317
+L9,218,HEIGHT,566489,1375815,990210,248064,248064
+-----
+00,DEFINE BLOCK,18,"GC analysis of aromatic hydrocarbons [GC, FPD]"
+L1,AnalID,Detector,PeakProperty,DBT,4MDBT,32MDBT,1MDBT
+-----
+18,10100-08A08,FPD,AREA,134589,89415,63435,45789
+-----
+00,DEFINE BLOCK,19,"GC analysis of aromatic hydrocarbons [GC, FID]"
+L1,AnalID,Detector,PeakProperty,2MN,1MN,2EN,1EN,26_27DMN,16DMN,15DMN,137TMN,136TMN,135_146TMN,236TMN,Biphenyl,Phenanthrene,3MP,2MP,9MP,1MP
+-----
+19,10100-08A08,FID,AREA,1214562,553517,565259,0,1375815,990210,248064,637904,867258,522549,642600,241507,467728,362621,456676,525851,394681
+-----
+00,DEFINE BLOCK,20,GC-MS analysis of aromatic hydrocarbons [GC]
+L1,AnalID,Detector,PeakProperty,2MN,1MN,Detector,PeakProperty,2EN,1EN,26_27DMN,16DMN,15DMN,Detector,PeakProperty,137TMN,136TMN,135_146TMN,236TMN,Detector,PeakProperty,Biphenyl,Detector,PeakProperty,Phenanthrene,Detector,PeakProperty,3MP,2MP,9MP,1MP
+-----
+20,10100-08A09,142,AREA,4262148,943147,156,AREA,172225,0,3447991,127892,137878,170,AREA,136197,133747,546311,432834,154,AREA,247003,178,AREA,628769,192,AREA,424646,354788,456532,464158
+-----
+00,DEFINE BLOCK,21,GC analysis of natural gas [GC]
+L1,AnalID,Detector,PeakProperty,C1,C2,C3,iC4,nC4,C5plus
+-----
+21,10203-01A71,FID,CNCAREA,91.3,4.2,2.5,0.2,0.8,1.0
+-----
+00,DEFINE BLOCK,22,Isotope analysis of natural gas [ISOTOPE]
+// Note that D13C and DD are now detector types and are no longer part of the parameter names!
+// Also note that isotope analysis of individual compounds now has the AnalType GC, not ISOT!
+L1,AnalID,Detector,PeakProperty,C1,C2,C3,iC4,nC4
+L2,Detector,PeakProperty,C1
+-----
+22,10203-01A71,DELTA13C,ISOTRATIO,-45.2,-30.9,-28.9,-26.6,-28.5
+L2,DELTA2H,ISOTRATIO,-222.0
+-----
+00,DEFINE BLOCK,23,vitrinite reflectance - mean data
+// The population number attribute (PopnNum) must be specified 
+// before the first ParamName 
+L1,AnalID,PopnNum,PopnMean,PopnStdev,PopnRead,VRReliability,VRQuality
+-----
+23,10100-10A13,1,0.63,0.05,21,good,main population
+23,10100-10A13,2,0.32,0.12,17,moderate,downfall?
+23,10100-10A13,3,1.20,0.28,5,poor,reworked
+23,10200-02A32,1,0.75,0.08,5,moderate,main population
+23,10200-02A32,2,0.28,0.10,3,poor,stained vitrinite
+-----
+00,DEFINE BLOCK,24,vitrinite reflectance - individual measurements
+L1,AnalID,ParamName,ParamValue
+-----
+// The individual values for vitrinite reflectance shall be reported as a text 
+// string. It is recommended to use the chosen Delimiter (e.g. COMMA) as 
+// separator between the values within the text string
+24,10200-02A32,Roil,"0.21,0.21,1.23,2.89,1.34,0.67,0.2"
+-----
+00,DEFINE BLOCK,25,VK
+L1,AnalID,FA,HA,AL,HE,WO,CO,SCI,VKAbundance,SCIQuality
+-----
+25,10200-03A34,20,45,5,10,15,5,"3-4, 5-6","Bisaccates: 80% indigenous, 20% reworked","Indigenous pop. slightly degraded, reworked pop. strongly degraded"
+-----
+00,DEFINE BLOCK,26,GC-IRMS analysis of saturated hydrocarbons [GC]
+L1,AnalID,Detector,PeakProperty,nC15,nC16,nC17,nC18,nC19,nC20,nC21,nC22,nC23,nC24,nC25,nC26,nC27,nC28,nC29,nC30,nC31,nC32,nC33,nC34,Pristane,Phytane
+-----
+26,10202-07A61,DELTA13C,ISOTRATIO,-27.8,-27.3,-27.9,-26.8,-27.5,-27.4,-28.1,-26.9,-27.4,-27.8,-27.2,-27.4,-27.6,-28.2,-27.6,-27.3,-27.6,-27.1,-26.9,-27.3,-27.7,-27.3
+-----

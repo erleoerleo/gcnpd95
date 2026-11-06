@@ -1,0 +1,172 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import catJson from '../src/data/catalogue.json';
+import type { Catalogue } from '../src/core/catalogue';
+import { decodeBytes, parseGcNpd95, splitRecord } from '../src/core/parser';
+import { validate, checkLithology } from '../src/core/validator';
+import { flatRows, toDelimited } from '../src/core/flatten';
+import { toJson } from '../src/core/json';
+
+const cat = catJson as unknown as Catalogue;
+const example = decodeBytes(readFileSync(new URL('../public/eksempelfil.txt', import.meta.url))).text.replace(/\r\n/g, '\n');
+
+const run = (text: string, profile: 'sodir' | 'generic' = 'sodir', name = 'GCH_RAW.ASC') => {
+  const pf = parseGcNpd95(text, name, cat);
+  return { pf, ...validate(pf, cat, profile) };
+};
+const codes = (text: string, profile: 'sodir' | 'generic' = 'sodir') =>
+  run(text, profile).issues.filter((i) => i.severity !== 'info').map((i) => i.code);
+const sub = (from: string, to: string) => {
+  expect(example.includes(from), `fixture contains ${from}`).toBe(true);
+  return example.replace(from, to);
+};
+
+describe('tokenizer', () => {
+  it('handles quotes, embedded quotes and empty fields', () => {
+    const r = splitRecord('01,"a,b",,"say ""hi""", x ', ',');
+    expect(r.fields).toEqual(['01', 'a,b', '', 'say "hi"', ' x ']);
+    expect(r.problems).toEqual([]);
+  });
+  it('reports unterminated quotes', () => {
+    expect(splitRecord('01,"abc', ',').problems.length).toBe(1);
+  });
+});
+
+describe('example file', () => {
+  it('has no errors or warnings in the Sodir profile', () => {
+    const r = run(example);
+    expect(r.counts.error).toBe(0);
+    expect(r.counts.warning).toBe(0);
+  });
+  it('builds the full hierarchy', () => {
+    const { pf } = run(example);
+    expect([pf.sites.length, pf.samples.length, pf.fractions.length, pf.analyses.length]).toEqual([5, 10, 46, 64]);
+    expect(pf.blocks).toHaveLength(26);
+    expect(pf.params.find((p) => p.block === '05' && p.name === 'TMAX' && p.analId === '10100-02A14')).toBeUndefined();
+    expect(pf.params.find((p) => p.block === '22' && p.detector === 'DELTA2H')?.value).toBe('-222.0');
+  });
+});
+
+describe('broken variants', () => {
+  const cases: [string, string, string, string][] = [
+    ['wrong version', 'Version        2.0', 'Version        1.0', 'F07'],
+    ['misaligned file definition', 'Contact        Ola Normann', 'Contact Ola Normann', 'F03'],
+    ['missing mandatory DTJ attribute', 'Contact        Ola Normann\n', '', 'F06'],
+    ['delimiter mismatch', 'Delimiter      COMMA', 'Delimiter      SEMICOLON', 'F08'],
+    ['bad block definition', '00,DEFINE BLOCK,03,Fraction data', '00,DEFINE BLOK,03,Fraction data', 'F10'],
+    ['duplicate block id', '00,DEFINE BLOCK,06,More Rock-Eval data', '00,DEFINE BLOCK,05,More Rock-Eval data', 'F11'],
+    ['record for wrong block', '06,99101-01A01,2.27', '07,99101-01A01,2.27', 'F17'],
+    ['too many values', '10,10202-02A54,17.4,18.7,27.6,36.3', '10,10202-02A54,17.4,18.7,27.6,36.3,99', 'F18'],
+    ['unquoted delimiter text', '"turbodrilled 4000m-TD"', 'turbodrilled, 4000m-TD', 'F18'],
+    ['unterminated quote', '"Poorly washed sample"', '"Poorly washed sample', 'F19'],
+    ['decimal comma', '11,10100-04A04,-32.3', '11,10100-04A04,"-32,3"', 'F23'],
+    ['bad date', 'TransferDate   15.06.1995', 'TransferDate   31.02.1995', 'F24'],
+    ['undefined parent', '03,10101,F10101-01', '03,10109,F10101-01', 'M05'],
+    ['duplicate id', '02,W101,10101,', '02,W101,10100,', 'M04'],
+    ['missing mandatory value', '04,F10101-01,10101-01A21,RE,A,', '04,F10101-01,10101-01A21,RE,,', 'M03'],
+    ['GC without detector', '13,10100-11A03,FID,NORMAREA', '13,10100-11A03,,NORMAREA', 'M08'],
+    ['rock sample without lithology', '02,W102,10200,1567.23,1567.23,SWC,78665,S28365,CLYST', '02,W102,10200,1567.23,1567.23,SWC,78665,S28365,', 'M15'],
+    ['unknown parameter', 'L1,TOCEOM', 'L1,TOCEOMX', 'D02'],
+    ['parameter of wrong analysis type', 'L1,d13C', 'L1,TOC', 'D03'],
+    ['illegal code', '03,10100,F10100-01,90001-01,SDUN', '03,10100,F10100-01,90001-01,SDUX', 'D04'],
+    ['non numeric value', '08,10100-01A02,2.22,5.704,91.3', '08,10100-01A02,2.22,abc,91.3', 'D05'],
+    ['out of range', '06,99201-01A01,11.81', '06,99201-01A01,111.81', 'D06'],
+    ['bad lithology', '03,10200,F10200-04,78665-04,SDUN,CLYST (DK GY)', '03,10200,F10200-04,78665-04,SDUN,CLYST (DARK GY)', 'D08'],
+    ['case sensitivity', 'L1,FracRefNumber', 'L1,FracRefnumber', 'D09'],
+    ['unknown well', '6407/7-A-18 H', '6407/7-A-99 H', 'S01'],
+    ['unknown sender', 'Sender         STATOIL', 'Sender         ACME', 'S03'],
+    ['attribute from wrong entity', 'L1,FComments', 'L1,SComments', 'M01'],
+    ['missing terminator at end', '26,10202-07A61,DELTA13C,ISOTRATIO,-27.8,-27.3,-27.9,-26.8,-27.5,-27.4,-28.1,-26.9,-27.4,-27.8,-27.2,-27.4,-27.6,-28.2,-27.6,-27.3,-27.6,-27.1,-26.9,-27.3,-27.7,-27.3\n-----', '26,10202-07A61,DELTA13C,ISOTRATIO,-27.8', 'F12'],
+  ];
+  for (const [name, from, to, code] of cases) {
+    it(`${name} -> ${code}`, () => {
+      expect(codes(sub(from, to))).toContain(code);
+    });
+  }
+
+  it('suggests the registered well name for a sloppy spelling', () => {
+    const r = run(sub('6407/7-A-18 H', '6407/07-A-18H'));
+    expect(r.issues.find((i) => i.code === 'S01')?.hint).toContain('6407/7-A-18 H');
+  });
+
+  it('downgrades Sodir-specific checks in the generic profile', () => {
+    const t = sub('6407/7-A-18 H', '6407/7-A-99 H');
+    expect(run(t, 'sodir').counts.error).toBeGreaterThan(0);
+    expect(run(t, 'generic').counts.error).toBe(0);
+  });
+
+  it('recovers from a file without file definition block', () => {
+    const t = example.slice(example.indexOf('// Record Definition Block 01'));
+    const r = run(t);
+    expect(r.issues.map((i) => i.code)).toContain('F02');
+    expect(r.pf.samples.length).toBe(10);
+  });
+
+  it('accepts TAB and SEMICOLON delimited files', () => {
+    for (const [name, d] of [['TAB', '\t'], ['SEMICOLON', ';']] as const) {
+      const lines = example.split(/\r?\n/);
+      const conv = lines.map((l) => {
+        if (l.startsWith('//') || !/^(\d\d|L\d),/.test(l)) return l;
+        return splitRecord(l, ',').fields.map((f) => (f.includes(d) || f.includes(';') ? `"${f}"` : f)).join(d);
+      });
+      const t = conv.join('\n').replace('Delimiter      COMMA', `Delimiter      ${name}`);
+      const r = run(t);
+      expect(r.counts.error, name).toBe(0);
+      expect(r.pf.params.length).toBe(run(example).pf.params.length);
+    }
+  });
+});
+
+describe('lithology syntax', () => {
+  it('accepts the spec examples', () => {
+    for (const s of ['CLYST / SLST (LAM)', 'CLYST (SLTY)', 'SST (SIL, CMT)', 'CLYST (LT GY) / CLYST (DK GY)', 'SST (CGR, RD) / SST (FGR, LT GY) / ADD'])
+      expect(checkLithology(s, cat, false), s).toEqual([]);
+  });
+  it('rejects BULK for samples and unknown codes', () => {
+    expect(checkLithology('BULK', cat, false).length).toBe(1);
+    expect(checkLithology('BULK', cat, true)).toEqual([]);
+    expect(checkLithology('CLAY (GREY)', cat, false).length).toBe(2);
+  });
+});
+
+describe('flattening', () => {
+  it('produces one row per result with full context', () => {
+    const { pf } = run(example);
+    const rows = flatRows(pf, cat);
+    expect(rows.length).toBe(pf.params.length);
+    const r = rows.find((x) => x.AnalID === '10100-01A01' && x.ParamName === 'TOC')!;
+    expect(r.SiteName).toBe('6407/7-A-18 H');
+    expect(r.LDepth).toBe(1237);
+    expect(r.Unit).toBe('wt%');
+    const txt = toDelimited([{ a: 'x;y', b: 'z' }], ['a', 'b'], ';');
+    expect(txt).toBe('a;b\r\n"x;y";z\r\n');
+  });
+});
+
+describe('json export', () => {
+  it('nests the full hierarchy and keeps every result', () => {
+    const { pf, ...res } = run(example);
+    const j = toJson(pf, cat, { layout: 'nested', validation: true }, { result: res, profile: 'sodir' }) as any;
+    expect(j.transferJob.TransferID).toBe('9501051728');
+    expect(j.sites).toHaveLength(5);
+    const re = j.sites[0].samples[0].fractions[0].analyses[0];
+    expect(re.AnalID).toBe('10100-01A01');
+    expect(re.results[0]).toEqual({ ParamName: 'TOC', ParamValue: 3.36, Unit: 'wt%', PComments: 'TOC from RE' });
+    const count = (o: any): number => (Array.isArray(o) ? o.reduce((a, x) => a + count(x), 0) : o && typeof o === 'object' ? (o.ParamName !== undefined ? 1 : 0) + Object.values(o).reduce((a: number, x) => a + count(x), 0) : 0);
+    expect(count(j.sites)).toBe(pf.params.length);
+    expect(j.unlinked).toBeUndefined();
+    expect(j.validation.errors).toBe(0);
+  });
+  it('keeps records with a missing parent under "unlinked"', () => {
+    const { pf } = run(sub('03,10101,F10101-01', '03,10109,F10101-01'));
+    const j = toJson(pf, cat, { layout: 'nested', validation: false }) as any;
+    expect(j.unlinked.fractions[0].FractionID).toBe('F10101-01');
+    expect(j.unlinked.fractions[0].analyses[0].results.length).toBeGreaterThan(0);
+  });
+  it('flat layout has one object per result', () => {
+    const { pf } = run(example);
+    const j = toJson(pf, cat, { layout: 'flat', validation: false }) as any;
+    expect(j.results).toHaveLength(pf.params.length);
+    expect(j.results[0].SiteName).toBe('6407/7-A-18 H');
+  });
+});
