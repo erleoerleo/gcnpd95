@@ -322,10 +322,14 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
   const [view, setView] = useState<PeakView>('chromatogram');
   const [stack, setStack] = useState(true);
   const avail = g ? g.analyses : [];
-  const sel = selected.filter((a) => avail.includes(a));
-  const active = sel.length ? sel : g ? best(g.id, 1) : [];
   const isIso = g?.peakProperty === 'ISOTRATIO';
   const mode: PeakView = isIso ? 'bars' : view;
+  // Stacked traces are told apart by position, overlaid traces and bars only by colour.
+  const stacked = mode === 'chromatogram' && stack;
+  const limit = stacked ? MAX_STACKED : MAX_OVERLAID;
+  const sel = selected.filter((a) => avail.includes(a));
+  const chosen = sel.length ? sel : g ? best(g.id, 1) : [];
+  const active = chosen.slice(0, limit);
 
   const prepared = useMemo(() => {
     if (!g) return null;
@@ -387,11 +391,17 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
     const range: [number, number] = [lo - pad, hi + pad];
     const top = Math.max(1e-12, ...prepared.series.flatMap((s) => [...s.values.values()]));
     const step = stack && prepared.series.length > 1 ? top * 1.45 : 0;
+    const baselines: { y: number; text: string; color: string; right: boolean }[] = [];
     const apexes: { x: number; y: number; base: number; name: string }[] = [];
     const datasets: ChartDataset[] = [];
     prepared.series.forEach((s, i) => {
       const offset = (prepared.series.length - 1 - i) * step;
       const pk = [...s.values.entries()].map(([name, h]) => ({ x: xOf.get(name)!, h, name }));
+      if (step) {
+        // name the trace on whichever end of its baseline has no peaks
+        const busy = (from: number, to: number) => pk.some((p) => p.h > 0 && p.x >= range[0] + (range[1] - range[0]) * from && p.x <= range[0] + (range[1] - range[0]) * to);
+        baselines.push({ y: offset, text: s.label, color: t.series[i % t.series.length], right: busy(0, 0.3) && !busy(0.65, 1) });
+      }
       datasets.push({
         type: 'line',
         label: s.label,
@@ -408,7 +418,7 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
       datasets.push({
         type: 'scatter',
         label: `apex:${s.id}`,
-        data: pk.map((p) => ({ x: p.x, y: p.h + offset, label: `${p.name}: ${fmt(p.h)}${normalise ? ' %' : ''}` })),
+        data: pk.map((p) => ({ x: p.x, y: p.h + offset, label: `${prepared.series.length > 1 ? `${s.id}, ` : ''}${p.name}: ${fmt(p.h)}${normalise ? ' %' : ''}` })),
         pointRadius: 0,
         pointHoverRadius: 4,
         pointHitRadius: 6,
@@ -424,7 +434,7 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
         interaction: { mode: 'nearest', axis: 'x', intersect: false },
         plugins: {
           ...baseOptions(t).plugins,
-          legend: { ...baseOptions(t).plugins.legend, display: prepared.series.length > 1, labels: { ...baseOptions(t).plugins.legend.labels, filter: (it: { text: string }) => !it.text.startsWith('apex:') } },
+          legend: { ...baseOptions(t).plugins.legend, display: prepared.series.length > 1 && !step, labels: { ...baseOptions(t).plugins.legend.labels, filter: (it: { text: string }) => !it.text.startsWith('apex:') } },
           tooltip: { ...baseOptions(t).plugins.tooltip, filter: (it) => String(it.dataset.label).startsWith('apex:'), callbacks: { title: () => '', label: (c) => (c.raw as XY).label } },
         },
         scales: {
@@ -441,12 +451,17 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
             },
             grid: { display: false },
           }),
-          y: axis(t, step ? `${unit}, traces offset` : unit, { min: 0, max: (top + step * (prepared.series.length - 1)) * 1.18, ticks: { color: t.muted, padding: 6, display: !step } }),
+          y: axis(t, step ? `${unit}, traces offset` : unit, {
+            min: 0,
+            max: top * 1.22 + step * (prepared.series.length - 1),
+            ticks: { color: t.muted, padding: 6, display: !step },
+            grid: { color: t.line, drawTicks: false, display: !step },
+          }),
         },
       },
-      plugins: [peakLabels(t, apexes)],
+      plugins: [peakLabels(t, apexes), traceLabels(t, baselines)],
     };
-    return { cfg, axis: xAxis };
+    return { cfg, axis: xAxis, height: step ? Math.max(440, 110 + prepared.series.length * 100) : 440 };
   }, [prepared, mode, stack, t, unit, normalise]);
 
   if (!g || !prepared) return null;
@@ -482,22 +497,29 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
             <input type="checkbox" checked={normalise} onChange={(e) => setNormalise(e.target.checked)} /> Normalise to largest peak
           </label>
         )}
-        {mode === 'chromatogram' && active.length > 1 && (
+        {mode === 'chromatogram' && chosen.length > 1 && (
           <label className="note">
             <input type="checkbox" checked={stack} onChange={(e) => setStack(e.target.checked)} /> Stack traces
           </label>
         )}
       </div>
       <div className="filters" role="group" aria-label="Analyses">
+        {avail.length > 2 && (
+          <span className="note">
+            {chosen.length} of {avail.length} selected, up to {limit}{stacked ? '' : ` (${MAX_STACKED} when stacked)`}.{' '}
+            <button className="btn ghost" onClick={() => setSelected(avail.slice(0, limit))}>Select {avail.length > limit ? `first ${limit}` : 'all'}</button>
+            <button className="btn ghost" onClick={() => setSelected(chosen.slice(0, 1))}>Clear</button>
+          </span>
+        )}
         {avail.map((id) => {
-          const on = active.includes(id);
+          const on = chosen.includes(id);
           return (
             <button
               key={id}
               className="chip"
               aria-pressed={on}
-              disabled={!on && active.length >= 4}
-              onClick={() => setSelected(on ? active.filter((x) => x !== id) : [...active, id])}
+              disabled={!on && chosen.length >= limit}
+              onClick={() => setSelected(on ? chosen.filter((x) => x !== id) : [...chosen, id])}
               title={gc.analyses.find((a) => a.analId === id)?.label}
             >
               {id}
@@ -505,15 +527,49 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
           );
         })}
       </div>
+      {chosen.length > active.length && (
+        <p className="note">
+          Showing the first {active.length} of {chosen.length} selected analyses. {mode === 'chromatogram' ? 'Stack the traces' : 'Use the stacked chromatogram'} to compare up to {MAX_STACKED}.
+        </p>
+      )}
       <div className="chart-box">
         {mode === 'chromatogram' && chrom ? (
-          <ChartCanvas config={chrom.cfg} label={`Reconstructed ${ion} chromatogram`} className="chart-canvas chrom" />
+          <ChartCanvas config={chrom.cfg} label={`Reconstructed ${ion} chromatogram`} height={chrom.height} />
         ) : barCfg ? (
           <ChartCanvas config={barCfg} label={`${ion} peaks as bars`} />
         ) : null}
       </div>
     </div>
   );
+}
+
+const MAX_OVERLAID = 4;
+const MAX_STACKED = 12;
+
+/** Names each stacked trace on its own baseline (with its colour as a swatch), so identity does not rely on colour. */
+function traceLabels(t: Theme, baselines: { y: number; text: string; color: string; right: boolean }[]) {
+  return {
+    id: 'traceLabels',
+    // drawn before the traces, so peaks stay visible on top of the names
+    beforeDatasetsDraw(chart: import('chart.js').Chart) {
+      if (!baselines.length) return;
+      const { ctx, scales, chartArea } = chart;
+      ctx.save();
+      ctx.font = "600 11px 'Archivo Variable', system-ui, sans-serif";
+      ctx.textBaseline = 'bottom';
+      for (const b of baselines) {
+        const y = scales.y.getPixelForValue(b.y) - 4;
+        if (y < chartArea.top + 12) continue;
+        const w = ctx.measureText(b.text).width + 13;
+        const x = b.right ? chartArea.right - 6 - w : chartArea.left + 6;
+        ctx.fillStyle = b.color;
+        ctx.fillRect(x, y - 9, 8, 8);
+        ctx.fillStyle = t.ink;
+        ctx.fillText(b.text, x + 13, y);
+      }
+      ctx.restore();
+    },
+  };
 }
 
 /** Compound names written vertically above the peak apexes, skipping labels that would overlap. */

@@ -57,7 +57,7 @@ export function useTheme(): Theme {
   return theme;
 }
 
-export function ChartCanvas(props: { config: ChartConfiguration; label: string; className?: string }) {
+export function ChartCanvas(props: { config: ChartConfiguration; label: string; className?: string; height?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     if (!ref.current) return;
@@ -65,7 +65,7 @@ export function ChartCanvas(props: { config: ChartConfiguration; label: string; 
     return () => chart.destroy();
   }, [props.config]);
   return (
-    <div className={props.className ?? 'chart-canvas'}>
+    <div className={props.className ?? 'chart-canvas'} style={props.height ? { height: props.height } : undefined}>
       <canvas ref={ref} role="img" aria-label={props.label} />
     </div>
   );
