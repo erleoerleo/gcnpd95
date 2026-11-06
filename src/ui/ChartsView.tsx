@@ -57,9 +57,9 @@ export function ChartsView(props: { parsed: ParsedFile; catalogue: Catalogue }) 
           Include reference samples (ADescription S)
         </label>
       )}
-      {re.length > 0 && <RockEval points={re} styles={styles} t={t} />}
-      <DepthTracks points={points} keys={data.keys} styles={styles} t={t} />
       <GcFingerprint parsed={parsed} t={t} />
+      <DepthTracks points={points} keys={data.keys} styles={styles} t={t} />
+      {re.length > 0 && <RockEval points={re} styles={styles} t={t} />}
       <CrossPlot points={points} keys={data.keys} styles={styles} t={t} />
     </section>
   );
