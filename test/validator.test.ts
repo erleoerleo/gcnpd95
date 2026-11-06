@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATALOGUE } from '../src/core/defaultCatalogue';
 import { decodeBytes, parseGcNpd95, splitRecord } from '../src/core/parser';
@@ -122,8 +122,8 @@ describe('lithology syntax', () => {
     for (const s of ['CLYST / SLST (LAM)', 'CLYST (SLTY)', 'SST (SIL, CMT)', 'CLYST (LT GY) / CLYST (DK GY)', 'SST (CGR, RD) / SST (FGR, LT GY) / ADD'])
       expect(checkLithology(s, cat, false), s).toEqual([]);
   });
-  it('rejects BULK for samples and unknown codes', () => {
-    expect(checkLithology('BULK', cat, false).length).toBe(1);
+  it('accepts BULK for samples (as Sodir does) but rejects unknown codes', () => {
+    expect(checkLithology('BULK', cat, false)).toEqual([]);
     expect(checkLithology('BULK', cat, true)).toEqual([]);
     expect(checkLithology('CLAY (GREY)', cat, false).length).toBe(2);
   });
@@ -195,4 +195,18 @@ describe('approved lists', () => {
     expect(c.sources?.wellbores).toBe('mine.txt');
     expect(c.lookups['3']).toBe(cat.lookups['3']);
   });
+});
+
+describe('files accepted by the official Sodir validator (data/test)', () => {
+  const dir = new URL('../data/test/', import.meta.url);
+  const files = readdirSync(dir).filter((f) => /\.(txt|asc)$/i.test(f));
+  it('has test files', () => expect(files.length).toBeGreaterThan(0));
+  for (const f of files) {
+    it(`${f} has no errors`, () => {
+      const { text, encoding } = decodeBytes(readFileSync(new URL(encodeURIComponent(f), dir)));
+      const pf = parseGcNpd95(text, 'GCH_RAW.ASC', cat, encoding);
+      const errors = validate(pf, cat, 'sodir').issues.filter((i) => i.severity === 'error');
+      expect(errors.map((e) => `${e.code} line ${e.line}: ${e.message}`)).toEqual([]);
+    });
+  }
 });

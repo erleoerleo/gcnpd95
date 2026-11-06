@@ -80,6 +80,7 @@ export const RULES: RuleDef[] = [
   R('D09', 'dictionary', 'error', 'Keywords and codes are case-sensitive'),
   R('D10', 'dictionary', 'info', 'UNKNOWN is accepted for historical data only'),
   R('D11', 'dictionary', 'error', 'Dictionary must be GC-DIC-V2'),
+  R('D12', 'dictionary', 'info', 'BULK is described as a fraction lithology'),
   R('S01', 'sodir', 'error', 'Norwegian well name not in the approved wellbore list', 'warning'),
   R('S02', 'sodir', 'warning', 'Site not in the wellbore list should have coordinates', 'info'),
   R('S03', 'sodir', 'error', 'Sender/Recipient not in the approved company list', 'warning'),

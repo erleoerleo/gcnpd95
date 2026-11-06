@@ -87,7 +87,6 @@ export function checkLithology(s: string, cat: Catalogue, isFraction: boolean): 
     if (!m) { out.push(`cannot read "${p}"`); continue; }
     const main = m[1];
     code(main, [1], 'main lithology');
-    if (main === 'BULK' && !isFraction) out.push('BULK can only be used for fractions');
     if (m[2] !== undefined) {
       for (const q of m[2].split(',')) {
         const toks = q.trim().split(/\s+/).filter(Boolean);
@@ -444,6 +443,11 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
   childless(pf.samples, 'SampleID', fracUsed, 'sample(s)', 'fractions');
   childless(pf.fractions, 'FractionID', anUsed, 'fraction(s)', 'analyses');
   childless(pf.analyses, 'AnalID', analysisHasParams, 'analysis/analyses', 'results');
+
+  // The dictionary reserves BULK for fractions, but Sodir's validator accepts it as sample lithology.
+  const bulkSamples = pf.samples.filter((r) => /^\s*BULK\b/.test(r.attrs.SLithology ?? ''));
+  if (bulkSamples.length)
+    add('D12', `${bulkSamples.length} ${bulkSamples.length === 1 ? 'sample uses' : 'samples use'} BULK as SLithology. The dictionary describes BULK as a fraction lithology; Sodir's validator accepts it for samples.`, bulkSamples[0].attrLine.SLithology ?? bulkSamples[0].line, 'Use UNKNOWN or a lithology code if the sample lithology is known.', bulkSamples[0].block);
 
   const unknownCount = [...pf.sites, ...pf.samples].filter((r) => Object.values(r.attrs).includes('UNKNOWN')).length;
   if (unknownCount) add('D10', `${unknownCount} site/sample records use UNKNOWN. This is accepted only for historical data and reference samples.`);
