@@ -6,6 +6,7 @@ import { validate, checkLithology } from '../src/core/validator';
 import { flatRows, toDelimited } from '../src/core/flatten';
 import { toJson } from '../src/core/json';
 import { parseList, withLists } from '../src/core/lists';
+import { applyFixes, collectFixes } from '../src/core/fixer';
 
 const cat = DEFAULT_CATALOGUE;
 const example = decodeBytes(readFileSync(new URL('../public/eksempelfil.txt', import.meta.url))).text.replace(/\r\n/g, '\n');
@@ -209,4 +210,51 @@ describe('files accepted by the official Sodir validator (data/test)', () => {
       expect(errors.map((e) => `${e.code} line ${e.line}: ${e.message}`)).toEqual([]);
     });
   }
+});
+
+describe('automatic fixes', () => {
+  const broken = example
+    .replace(/\n-----\n$/, '\n')
+    .replace('Contact        Ola Normann', 'Contact Ola Normann')
+    .replace('6407/7-A-18 H', '6407/07-A-18H')
+    .replace('04,F10101-01,10101-01A21,RE,A,GEOLABNOR', '04,F10101-01,10101-01A21,RE,A,GeolabNor')
+    .replace('04,F10101-02,10101-02A22,RE,A,GEOLABNOR', '04,F10101-02,10101-02A22,RE,A,Equinor')
+    .replace('11,10100-04A04,-32.3', '11,10100-04A04,"-32,3"')
+    .replace('03,10100,F10100-01,90001-01,SDUN', '03,10100,F10100-01,90001-01,sdun');
+
+  it('finds one fix per problem', () => {
+    const groups = collectFixes(run(broken).issues);
+    const byCode = Object.fromEntries(groups.map((g) => [g.code + ':' + (g.from ?? ''), g]));
+    expect(byCode['F12:'].choices).toEqual(['-----']);
+    expect(byCode['S01:6407/07-A-18H']).toMatchObject({ choices: ['6407/7-A-18 H'], confident: true });
+    expect(byCode['S04:GeolabNor']).toMatchObject({ choices: ['GEOLABNOR'], confident: true });
+    expect(byCode['S04:Equinor'].confident).toBe(false);
+    expect(byCode['S04:Equinor'].choices).toContain('EQUINOR ASA');
+    expect(byCode['F23:-32,3'].choices).toEqual(['-32.3']);
+    expect(byCode['D09:sdun'].choices).toEqual(['SDUN']);
+  });
+
+  it('produces a file without errors when the fixes are applied', () => {
+    const r = run(broken);
+    const groups = collectFixes(r.issues);
+    const fixed = applyFixes(broken, ',', groups.map((g) => ({ group: g, value: g.from === 'Equinor' ? 'EQUINOR ASA' : undefined })));
+    const after = run(fixed);
+    expect(after.issues.filter((i) => i.severity === 'error').map((i) => `${i.code} ${i.message}`)).toEqual([]);
+    expect(fixed.endsWith('-----\n')).toBe(true);
+    expect(fixed).toContain('Contact        Ola Normann');
+    expect(fixed).toContain(',6407/7-A-18 H,');
+    expect(fixed).toContain('04,F10101-02,10101-02A22,RE,A,EQUINOR ASA,');
+    expect(fixed).toContain('11,10100-04A04,-32.3');
+    // untouched lines keep their exact text, including quoting
+    expect(fixed).toContain('L2,"80% Claystone, dkgy, laminated; 20% Sandstone, lt gy, fine-grained"');
+  });
+
+  it('inserts a missing terminator between blocks and keeps CRLF line endings', () => {
+    const t = example.replace('08,10100-01A02,2.22,5.704,91.3\n-----\n', '08,10100-01A02,2.22,5.704,91.3\n').replace(/\n/g, '\r\n');
+    const groups = collectFixes(run(t).issues);
+    expect(groups.map((g) => g.code)).toContain('F12');
+    const fixed = applyFixes(t, ',', groups.map((g) => ({ group: g })));
+    expect(fixed).toContain('08,10100-01A02,2.22,5.704,91.3\r\n-----\r\n00,DEFINE BLOCK,09');
+    expect(run(fixed).counts.error).toBe(0);
+  });
 });

@@ -300,3 +300,18 @@ table.grid tr:hover td { background: var(--surface-2); }
 .toolbar label select { flex: 1; }
 .export-item .opts label { max-width: 100%; flex-wrap: wrap; }
 .export-item select { max-width: 100%; }
+
+/* ---------- Fix panel ---------- */
+.fix-panel { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: var(--radius); padding: 16px 18px; margin: 0 0 26px; }
+.fix-panel h3 { margin: 0 0 4px; font-size: 17px; font-stretch: 108%; font-weight: 700; }
+.fix-panel p { margin: 0 0 10px; color: var(--ink-2); font-size: 14px; max-width: 80ch; }
+.fix-list { list-style: none; margin: 4px 0 10px; padding: 0; }
+.fix-list li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px dotted var(--line-soft); font-size: 14px; }
+.fix-what { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; min-width: 0; }
+.fix-rule { color: var(--muted); font-size: 13px; min-width: 15ch; }
+.fix-what s { color: var(--error); text-decoration-thickness: 1px; }
+.fix-what b { font-weight: 600; color: var(--ok); }
+.fix-what select { max-width: 100%; }
+.fix-code { font-family: var(--mono); font-size: 12.5px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.fix-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.fix-rename { margin: 0 0 12px !important; }

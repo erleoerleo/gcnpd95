@@ -1,7 +1,7 @@
 import { LOOKUP, type Catalogue, type AttributeDef } from './catalogue';
 import { LEVELS, LEVEL_KEY, LEVEL_PARENT_KEY, LEVEL_LABEL, suggest, editDistance } from './parser';
 import { severityFor, type Profile } from './rules';
-import type { EntityRow, Issue, Level, ParsedFile } from './types';
+import type { EntityRow, FixProposal, FixTarget, Issue, Level, ParsedFile } from './types';
 
 export const ROCK_SAMPLE_TYPES = new Set(['CCOM', 'COCH', 'COFI', 'COPL', 'COSP', 'DC', 'DCG', 'DCOM', 'OC', 'SWC', 'SCOM', 'SRFC']);
 const FILEDEF_ORDER = ['Format', 'Version', 'Dictionary', 'Delimiter'];
@@ -40,20 +40,23 @@ function wellIndex(cat: Catalogue) {
   return wellIndexCache;
 }
 
-export function suggestWell(name: string, cat: Catalogue): string | null {
+/** Approved wellbore names close to `name`. Confident when only blanks, zeros or case differ. */
+export function wellCandidates(name: string, cat: Catalogue): { choices: string[]; confident: boolean } {
   const { map, names } = wellIndex(cat);
-  const exact = map.get(normaliseWellName(name));
-  if (exact) return exact;
-  const quad = name.split('/')[0]?.trim();
-  const pool = names.filter((n) => n.split('/')[0] === quad);
-  let best: string | null = null;
-  let bestD = 3;
   const a = normaliseWellName(name);
-  for (const n of pool) {
-    const d = editDistance(a, normaliseWellName(n), bestD);
-    if (d < bestD) { bestD = d; best = n; }
-  }
-  return best;
+  const exact = map.get(a);
+  if (exact) return { choices: [exact], confident: true };
+  const quad = name.split('/')[0]?.trim();
+  const scored = names
+    .filter((n) => n.split('/')[0] === quad)
+    .map((n) => [editDistance(a, normaliseWellName(n), 3), n] as const)
+    .filter(([d]) => d < 3)
+    .sort((x, y) => x[0] - y[0] || x[1].localeCompare(y[1], undefined, { numeric: true }));
+  return { choices: scored.slice(0, 6).map(([, n]) => n), confident: false };
+}
+
+export function suggestWell(name: string, cat: Catalogue): string | null {
+  return wellCandidates(name, cat).choices[0] ?? null;
 }
 
 /** Validates a lithology string such as "CLYST (DK GY) / SST (FGR, LT GY)". Returns problems. */
@@ -104,8 +107,12 @@ export function checkLithology(s: string, cat: Catalogue, isFraction: boolean): 
 
 export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): ValidationResult {
   const issues: Issue[] = [...pf.issues.map((i) => ({ ...i }))];
-  const add = (code: string, message: string, line?: number, hint?: string, blockId?: string) =>
-    issues.push({ severity: 'error', code, message, line, hint, blockId });
+  const add = (code: string, message: string, line?: number, hint?: string, blockId?: string, fix?: FixProposal) =>
+    issues.push({ severity: 'error', code, message, line, hint, blockId, ...(fix ? { fix } : {}) });
+  const companyFix = (v: string, target: FixTarget): FixProposal | undefined => {
+    const c = companyCandidates(v, cat);
+    return c.choices.length ? { group: `company:${v}`, title: `Company name "${v}"`, from: v, choices: c.choices, confident: c.confident, target } : undefined;
+  };
 
   const companies = cat.lookups[LOOKUP.Company] ?? {};
   const companyList = cat.sources?.companies ? 'the approved company list' : 'the catalogue company codes';
@@ -156,7 +163,8 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
     add('D04', `DTJStatus "${st.value}" must be ${Object.keys(cat.lookups[LOOKUP.DTJStatus] ?? {}).join(' (new) or ')} (retransfer).`, st.line);
   for (const k of ['Sender', 'Recipient']) {
     const e = fd.get(k);
-    if (e && e.value && !(e.value in companies)) add('S03', `${k} "${e.value}" is not in ${companyList}.`, e.line, companyHint(e.value, cat));
+    if (e && e.value && !(e.value in companies))
+      add('S03', `${k} "${e.value}" is not in ${companyList}.`, e.line, companyHint(e.value, cat), undefined, companyFix(e.value, { kind: 'fileDef', line: e.line, name: k }));
   }
   const order = pf.fileDef.map((e) => e.name);
   if (FILEDEF_ORDER.some((n, i) => order[i] !== n) && FILEDEF_ORDER.every((n) => order.includes(n)))
@@ -188,13 +196,16 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
   }
 
   // ---------- Attribute values ----------
-  const checkValue = (def: AttributeDef, v: string, line: number, blockId: string, ctx: { fraction?: boolean }) => {
+  const checkValue = (def: AttributeDef, v: string, line: number, blockId: string, ctx: { fraction?: boolean; field?: number }) => {
+    const target: FixTarget | null = ctx.field !== undefined ? { kind: 'field', line, field: ctx.field } : null;
     switch (def.checkType) {
       case 1:
       case 6:
         if (def.checkType === 6 && v === 'UNKNOWN') break;
         if (!NUM_RE.test(v)) {
-          if (/^[+-]?\d+,\d+$/.test(v)) add('F23', `${def.name} "${v}" uses a decimal comma.`, line, `Write ${v.replace(',', '.')}`, blockId);
+          if (/^[+-]?\d+,\d+$/.test(v))
+            add('F23', `${def.name} "${v}" uses a decimal comma.`, line, `Write ${v.replace(',', '.')}`, blockId,
+              target ? { group: 'F23', title: 'Decimal comma', from: v, choices: [v.replace(',', '.')], confident: true, target } : undefined);
           else add('D05', `${def.name} must be numeric${def.checkType === 6 ? ' or UNKNOWN' : ''}, found "${v}".`, line, undefined, blockId);
         } else {
           const n = Number(v);
@@ -218,11 +229,13 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
       const legal = cat.lookups[def.lookupId] ?? {};
       if (!(v in legal)) {
         if (def.lookupId === LOOKUP.Company) {
-          add(def.name === 'Sender' || def.name === 'Recipient' ? 'S03' : 'S04', `${def.name} "${v}" is not in ${companyList}.`, line, companyHint(v, cat), blockId);
+          add(def.name === 'Sender' || def.name === 'Recipient' ? 'S03' : 'S04', `${def.name} "${v}" is not in ${companyList}.`, line, companyHint(v, cat), blockId, target ? companyFix(v, target) : undefined);
           return;
         }
         const ci = Object.keys(legal).find((k) => k.toLowerCase() === v.toLowerCase());
-        if (ci) add('D09', `${def.name} "${v}" must be written "${ci}".`, line, undefined, blockId);
+        if (ci)
+          add('D09', `${def.name} "${v}" must be written "${ci}".`, line, undefined, blockId,
+            target ? { group: `case:${def.name}:${v}`, title: `${def.name} "${v}"`, from: v, choices: [ci], confident: true, target } : undefined);
         else {
           const s = suggest(v, Object.keys(legal), 1);
           const list = Object.keys(legal);
@@ -270,7 +283,7 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
         if (v === null) continue;
         const def = cat.attributes[a];
         if (!def || a === parentKey) continue;
-        checkValue(def, v, lineOf(a), r.block, { fraction: lv === 'fraction' });
+        checkValue(def, v, lineOf(a), r.block, { fraction: lv === 'fraction', field: r.attrField[a] });
       }
       // references
       const pv = r.attrs[parentKey];
@@ -312,8 +325,12 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
     if (name in knownWells) continue;
     const isNorwegianWell = r.attrs.Country === 'NO' && r.attrs.SiteType === 'WELL';
     if (isNorwegianWell) {
-      const s = suggestWell(name, cat);
-      add('S01', `"${name}" is not in ${wellList}.`, line, s ? `Did you mean ${s}?` : 'Use the compact wellbore name, e.g. 6407/7-A-18 H or 15/9-19 SR2.', r.block);
+      const c = wellCandidates(name, cat);
+      const field = r.attrField.SiteName;
+      add('S01', `"${name}" is not in ${wellList}.`, line,
+        c.choices.length ? (c.choices.length === 1 || c.confident ? `Did you mean ${c.choices[0]}?` : `Close matches: ${c.choices.slice(0, 4).join(', ')}`) : 'Use the compact wellbore name, e.g. 6407/7-A-18 H or 15/9-19 SR2.',
+        r.block,
+        c.choices.length && field !== undefined ? { group: `well:${name}`, title: `Wellbore name "${name}"`, from: name, choices: c.choices, confident: c.confident, target: { kind: 'field', line, field } } : undefined);
     } else if (!hasCoords) {
       add('S02', `Site "${name}" is not a registered Norwegian well and has no SSLatitude/SSLongitude.`, line, 'Coordinates are seconds of arc: degrees*3600 + minutes*60 + seconds.', r.block);
     }
@@ -414,7 +431,9 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
     if (def) {
       if (def.numeric || def.checkType === 1 || def.checkType === 2) {
         if (!NUM_RE.test(p.value)) {
-          if (/^[+-]?\d+,\d+$/.test(p.value)) add('F23', `${p.name} "${p.value}" uses a decimal comma.`, p.line, `Write ${p.value.replace(',', '.')}`, p.block);
+          if (/^[+-]?\d+,\d+$/.test(p.value))
+            add('F23', `${p.name} "${p.value}" uses a decimal comma.`, p.line, `Write ${p.value.replace(',', '.')}`, p.block,
+              { group: 'F23', title: 'Decimal comma', from: p.value, choices: [p.value.replace(',', '.')], confident: true, target: { kind: 'field', line: p.line, field: p.field } });
           else if (def.numeric) add('D05', `${p.name} must be numeric, found "${p.value}".`, p.line, undefined, p.block);
         } else {
           const n = Number(p.value);
@@ -463,17 +482,26 @@ export function validate(pf: ParsedFile, cat: Catalogue, profile: Profile): Vali
   return { issues: out, counts };
 }
 
-/** Hint for a company name that is not on the approved list: exact spelling, or names that contain it. */
-export function companyHint(v: string, cat: Catalogue): string | undefined {
+/** Approved company names for `v`: the same name in other case/spacing (confident), or similar names. */
+export function companyCandidates(v: string, cat: Catalogue): { choices: string[]; confident: boolean } {
   const names = Object.keys(cat.lookups[LOOKUP.Company] ?? {});
-  const up = v.toUpperCase().trim();
-  const exact = names.find((n) => n.toUpperCase() === up);
-  if (exact) return `Write it exactly as on the list: ${exact}`;
+  const norm = (x: string) => x.toUpperCase().replace(/\s+/g, ' ').trim();
+  const up = norm(v);
+  const exact = names.find((n) => norm(n) === up);
+  if (exact) return { choices: [exact], confident: true };
   const words = up.split(/[^A-ZÆØÅ0-9]+/).filter((w) => w.length >= 3);
-  const hits = names.filter((n) => words.length && words.every((w) => n.toUpperCase().includes(w))).slice(0, 4);
-  if (hits.length) return `Approved names include: ${hits.join(', ')}`;
-  const s = suggest(v, names, 2);
-  return s ? `Did you mean ${s}?` : undefined;
+  const hits = names.filter((n) => words.length && words.every((w) => n.toUpperCase().includes(w)));
+  const close = suggest(v, names, 2);
+  const choices = [...new Set([...(close ? [close] : []), ...hits])].slice(0, 8);
+  return { choices, confident: false };
+}
+
+/** Hint for a company name that is not on the approved list. */
+export function companyHint(v: string, cat: Catalogue): string | undefined {
+  const { choices, confident } = companyCandidates(v, cat);
+  if (!choices.length) return undefined;
+  if (confident) return `Write it exactly as on the list: ${choices[0]}`;
+  return choices.length === 1 ? `Did you mean ${choices[0]}?` : `Approved names include: ${choices.slice(0, 4).join(', ')}`;
 }
 
 function suggestHint(v: string, list: string[]): string | undefined {

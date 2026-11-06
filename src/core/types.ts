@@ -1,5 +1,25 @@
 export type Severity = 'error' | 'warning' | 'info';
 
+/** Where a fix is applied. Field indexes count the record identifier as field 0. */
+export type FixTarget =
+  | { kind: 'field'; line: number; field: number }
+  | { kind: 'fileDef'; line: number; name: string }
+  | { kind: 'replaceLine'; line: number }
+  | { kind: 'insertBefore'; line: number }
+  | { kind: 'append' };
+
+export interface FixProposal {
+  /** issues with the same group are fixed together with one choice */
+  group: string;
+  title: string;
+  from?: string;
+  /** replacement value(s); the first is the default */
+  choices: string[];
+  /** true when there is exactly one right answer (ticked by default) */
+  confident: boolean;
+  target: FixTarget;
+}
+
 export interface Issue {
   severity: Severity;
   code: string;
@@ -7,6 +27,7 @@ export interface Issue {
   line?: number;
   blockId?: string;
   hint?: string;
+  fix?: FixProposal;
 }
 
 export type LineKind =
@@ -72,6 +93,8 @@ export interface EntityRow {
   attrs: Record<string, string | null>;
   /** line on which each attribute value was given */
   attrLine: Record<string, number>;
+  /** field index (record identifier = 0) on that line */
+  attrField: Record<string, number>;
   line: number;
   block: string;
 }
@@ -86,6 +109,8 @@ export interface ParamRow {
   popnNum: string | null;
   comment: string | null;
   line: number;
+  /** field index of the value on its line (record identifier = 0) */
+  field: number;
   block: string;
   /** order of appearance within the block definition, used to keep chromatogram order */
   order: number;

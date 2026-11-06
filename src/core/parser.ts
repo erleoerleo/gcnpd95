@@ -72,6 +72,8 @@ export function decodeBytes(bytes: Uint8Array): { text: string; encoding: string
 export interface SplitResult {
   fields: string[];
   quoted: boolean[];
+  /** [start, end) of each raw field in the text, quotes included */
+  spans: [number, number][];
   problems: string[];
 }
 
@@ -79,6 +81,7 @@ export interface SplitResult {
 export function splitRecord(text: string, delim: string): SplitResult {
   const fields: string[] = [];
   const quoted: boolean[] = [];
+  const spans: [number, number][] = [];
   const problems: string[] = [];
   const n = text.length;
   let i = 0;
@@ -105,6 +108,7 @@ export function splitRecord(text: string, delim: string): SplitResult {
       if (trailing) problems.push(`text after the closing quote: ${trailing}`);
       fields.push(s);
       quoted.push(true);
+      spans.push([i, k]);
       if (k >= n) break;
       i = k + 1;
     } else {
@@ -114,11 +118,12 @@ export function splitRecord(text: string, delim: string): SplitResult {
       if (raw.includes('"')) problems.push(`double quote in text that is not encapsulated: ${raw.trim()}`);
       fields.push(raw);
       quoted.push(false);
+      spans.push([i, k]);
       if (k >= n) break;
       i = k + 1;
     }
   }
-  return { fields, quoted, problems };
+  return { fields, quoted, spans, problems };
 }
 
 /** Field value with the missing-value rules applied (empty or blanks = missing). */
@@ -136,7 +141,7 @@ const ciIndex = (keys: string[]) => {
 
 export function parseGcNpd95(text: string, fileName: string, cat: Catalogue, encoding = 'ASCII'): ParsedFile {
   const issues: Issue[] = [];
-  const issue = (code: string, message: string, line?: number, extra?: { hint?: string; blockId?: string }) =>
+  const issue = (code: string, message: string, line?: number, extra?: { hint?: string; blockId?: string; fix?: Issue['fix'] }) =>
     issues.push({ severity: 'error', code, message, line, ...extra });
 
   const attrCi = ciIndex(Object.keys(cat.attributes));
@@ -189,6 +194,7 @@ export function parseGcNpd95(text: string, fileName: string, cat: Catalogue, enc
       if (m) { name = m[1]; value = m[2].trim(); }
       issue('F03', `"${name}" is not column-aligned: the value must start in column 16.`, l.no, {
         hint: `${name.padEnd(15, ' ')}${value}`,
+        fix: { group: `F03:${l.no}`, title: `Align ${name} to column 16`, from: t, choices: [`${name.padEnd(15, ' ')}${value}`], confident: true, target: { kind: 'replaceLine', line: l.no } },
       });
     }
     fileDef.push({ name, value, line: l.no });
@@ -369,7 +375,10 @@ export function parseGcNpd95(text: string, fileName: string, cat: Catalogue, enc
         closeRecDef(cur);
         issue('F15', `Record definition block ${(cur as Block).id} has no value assignment block.`, (cur as Block).defLine, { blockId: (cur as Block).id });
       } else if (inState('values') && cur) {
-        issue('F12', `Value assignment block ${(cur as Block).id} is not terminated before the next block starts.`, l.no, { blockId: (cur as Block).id });
+        issue('F12', `Value assignment block ${(cur as Block).id} is not terminated before the next block starts.`, l.no, {
+          blockId: (cur as Block).id,
+          fix: { group: `F12:${l.no}`, title: `Add ----- before line ${l.no}`, choices: ['-----'], confident: true, target: { kind: 'insertBefore', line: l.no } },
+        });
       }
       startBlock(l, t);
       continue;
@@ -511,7 +520,10 @@ export function parseGcNpd95(text: string, fileName: string, cat: Catalogue, enc
       issue('F12', `Record definition block ${b.id} is not terminated (end of file).`, lines.length, { blockId: b.id });
       issue('F15', `Record definition block ${b.id} has no value assignment block.`, b.defLine, { blockId: b.id });
     } else {
-      issue('F12', `Value assignment block ${b.id} is not terminated with ----- (end of file).`, lines.length, { blockId: b.id });
+      issue('F12', `Value assignment block ${b.id} is not terminated with ----- (end of file).`, lines.length, {
+        blockId: b.id,
+        fix: { group: 'F12:eof', title: 'Add ----- at the end of the file', choices: ['-----'], confident: true, target: { kind: 'append' } },
+      });
     }
   }
 
@@ -527,7 +539,7 @@ export function parseGcNpd95(text: string, fileName: string, cat: Catalogue, enc
     if (!b.level) continue;
     for (const rec of b.records) {
       if (b.level !== 'parameter') {
-        const row: EntityRow = { attrs: {}, attrLine: {}, line: rec.line, block: b.id };
+        const row: EntityRow = { attrs: {}, attrLine: {}, attrField: {}, line: rec.line, block: b.id };
         for (const vl of rec.lines) {
           const fmt = b.formats.get(vl.n)!;
           fmt.slots.forEach((s, i) => {
@@ -536,6 +548,7 @@ export function parseGcNpd95(text: string, fileName: string, cat: Catalogue, enc
             if (v !== null || !(s.name in row.attrs)) {
               row.attrs[s.name] = v;
               row.attrLine[s.name] = vl.line;
+              row.attrField[s.name] = i + 1;
             }
           });
         }
@@ -574,6 +587,7 @@ export function parseGcNpd95(text: string, fileName: string, cat: Catalogue, enc
               popnNum: popn,
               comment: null,
               line: vl.line,
+              field: i + 1,
               block: b.id,
               order: vl.n * 1000 + i,
             });

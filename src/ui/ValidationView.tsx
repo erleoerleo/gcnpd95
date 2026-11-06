@@ -3,6 +3,7 @@ import type { Catalogue } from '../core/catalogue';
 import { RULES, RULE_BY_CODE, SCOPE_LABEL, severityFor, type Profile } from '../core/rules';
 import type { Issue, ParsedFile, Severity } from '../core/types';
 import type { ValidationResult } from '../core/validator';
+import { FixPanel } from './FixPanel';
 
 const SEV_LABEL: Record<Severity, string> = { error: 'Error', warning: 'Warning', info: 'Note' };
 const plural = (n: number, w: string) => `${n.toLocaleString()} ${w}${n === 1 ? '' : 's'}`;
@@ -13,6 +14,11 @@ export function ValidationView(props: {
   profile: Profile;
   catalogue: Catalogue;
   onLine: (n: number) => void;
+  text: string;
+  fileName: string;
+  fixedFrom: string | null;
+  onApplyFixes: (text: string, summary: string) => void;
+  onRevert: () => void;
 }) {
   const { parsed, result, profile } = props;
   const { error, warning, info } = result.counts;
@@ -43,6 +49,17 @@ export function ValidationView(props: {
         <h2>{verdict.title}</h2>
         <p>{verdict.text}</p>
       </div>
+
+      <FixPanel
+        parsed={parsed}
+        result={result}
+        text={props.text}
+        fileName={props.fileName}
+        fixedFrom={props.fixedFrom}
+        onApply={props.onApplyFixes}
+        onRevert={props.onRevert}
+        onLine={props.onLine}
+      />
 
       <div className="stats">
         <Stat n={parsed.sites.length} label="sites" />

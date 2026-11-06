@@ -3,6 +3,8 @@ import type { Catalogue } from '../core/catalogue';
 import { buildWorkbook, download, latin1, type ExcelOptions } from '../core/excel';
 import { entityTable, FLAT_COLUMNS, flatRows, toDelimited, wideTables } from '../core/flatten';
 import { toJson, type JsonOptions } from '../core/json';
+import { nonLatin1, SODIR_FILE_NAME } from '../core/fixer';
+import { saveGcFile } from './FixPanel';
 import { RULE_BY_CODE, type Profile } from '../core/rules';
 import type { ParsedFile } from '../core/types';
 import type { ValidationResult } from '../core/validator';
@@ -15,6 +17,7 @@ export function ExportView(props: {
   catalogue: Catalogue;
   profile: Profile;
   fileName: string;
+  text: string;
   onDone: (msg: string) => void;
 }) {
   const { parsed, result, catalogue, profile } = props;
@@ -117,6 +120,18 @@ export function ExportView(props: {
       )}
       {err && <div className="error-box">{err}</div>}
       <div className="export-list">
+        <div className="export-item">
+          <div>
+            <h3>GC-NPD-95 file for Sodir</h3>
+            <p>
+              The file itself, including any fixes applied on the Validation tab, saved as {SODIR_FILE_NAME} in the ISO 8859-1
+              character set required by the specification.
+              {nonLatin1(props.text).length ? ` These characters cannot be stored and will become "?": ${nonLatin1(props.text).join(' ')}` : ''}
+            </p>
+          </div>
+          <button className="btn primary" onClick={() => { saveGcFile(props.text); props.onDone(`Saved ${SODIR_FILE_NAME}`); }}>Save {SODIR_FILE_NAME}</button>
+        </div>
+
         <div className="export-item">
           <div>
             <h3>Excel workbook</h3>

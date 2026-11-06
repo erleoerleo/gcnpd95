@@ -51,6 +51,8 @@ export default function App() {
   });
   const [profile, setProfile] = useState<Profile>(() => (store.get(LS_PROFILE) === 'generic' ? 'generic' : 'sodir'));
   const [file, setFile] = useState<LoadedFile | null>(null);
+  /** the file as opened, while a fixed copy is shown */
+  const [original, setOriginal] = useState<LoadedFile | null>(null);
   const [tab, setTab] = useState<Tab>('validation');
   const [focusLine, setFocusLine] = useState<{ line: number; n: number } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -85,6 +87,7 @@ export default function App() {
       setLoadError(`"${name}" does not look like a GC-NPD-95 file: no "Format" line or "00,DEFINE BLOCK" line was found near the top.`);
     } else setLoadError(null);
     setFile({ name, text, encoding, size: bytes.length });
+    setOriginal(null);
     setTab('validation');
     setFocusLine(null);
   }, []);
@@ -228,12 +231,32 @@ export default function App() {
               ))}
             </nav>
             {loadError && <div className="error-box">{loadError}</div>}
-            {tab === 'validation' && <ValidationView parsed={parsed} result={result} profile={profile} catalogue={catalogue} onLine={goToLine} />}
+            {tab === 'validation' && (
+              <ValidationView
+                parsed={parsed}
+                result={result}
+                profile={profile}
+                catalogue={catalogue}
+                onLine={goToLine}
+                text={file.text}
+                fileName={file.name}
+                fixedFrom={original?.name ?? null}
+                onApplyFixes={(text, summary) => {
+                  setOriginal((o) => o ?? file);
+                  setFile({ name: 'GCH_RAW.ASC', text, encoding: 'ISO 8859-1', size: text.length });
+                  setToast(`${summary}. Validated again.`);
+                }}
+                onRevert={() => {
+                  if (original) setFile(original);
+                  setOriginal(null);
+                }}
+              />
+            )}
             {tab === 'data' && <DataView parsed={parsed} catalogue={catalogue} onLine={goToLine} />}
             {tab === 'charts' && <ChartsView parsed={parsed} catalogue={catalogue} />}
             {tab === 'source' && <SourceView parsed={parsed} issues={result.issues} focus={focusLine} />}
             {tab === 'export' && (
-              <ExportView parsed={parsed} result={result} catalogue={catalogue} profile={profile} fileName={file.name} onDone={setToast} />
+              <ExportView parsed={parsed} result={result} catalogue={catalogue} profile={profile} fileName={file.name} text={file.text} onDone={setToast} />
             )}
           </main>
         </div>

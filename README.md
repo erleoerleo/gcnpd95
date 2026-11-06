@@ -17,12 +17,18 @@ on GitHub Pages or any static host.
     codes become warnings. Use it for files from other countries that follow GC-NPD-95.
 - Every problem has a rule code, a line number and, where it is clear, a suggested fix
   (for example `6407/07-A-18H` → *Did you mean 6407/7-A-18 H?*).
+- **Automatic fixes** for simple errors, previewed before they are applied: missing block
+  terminators (`-----`), misspelled wellbore and company names (replaced with a name from the
+  approved lists), codes in the wrong case, decimal commas and misaligned file definition lines.
+  Fixes with one right answer are ticked by default; for names with several candidates you pick
+  one. The corrected file can be re-validated in place and saved as `GCH_RAW.ASC` (ISO 8859-1),
+  the name Sodir requires. The original file is never changed.
 - **Data**: hierarchy (site, sample, fraction, analysis), entity tables, all results flattened,
   and one wide table per analysis type (RE, GC, ISOT, ...), with units from the dictionary.
 - **Charts**: Rock-Eval HI–Tmax and S2–TOC with kerogen type guides, depth tracks
   (composite-log style), GC fingerprints by detector and peak property, and a cross-plot by sample.
 - **Source** view with problem markers and previous/next problem navigation.
-- **Export** to a formatted Excel workbook, delimited text (TAB, semicolon or comma; UTF-8 or
+- **Export** the file itself as `GCH_RAW.ASC`, or convert it to a formatted Excel workbook, delimited text (TAB, semicolon or comma; UTF-8 or
   ISO 8859-1), JSON, and a plain text validation report.
 - **JSON** comes in two layouts. *Nested* follows the data model: `transferJob`, then
   `sites[] > samples[] > fractions[] > analyses[] > results[]`, with the GC-NPD-95 attribute
@@ -54,7 +60,11 @@ npm run validate -- GCH_RAW.ASC
 npm run validate -- data/*.txt --generic
 npm run validate -- GCH_RAW.ASC --json        # also writes GCH_RAW.json (nested)
 npm run validate -- GCH_RAW.ASC --json-flat   # also writes GCH_RAW_flat.json
+npm run validate -- lab_report.txt --fix      # writes a corrected GCH_RAW.ASC next to it
 ```
+
+`--fix` applies only the fixes that have one right answer and lists name corrections with
+several candidates, so you can choose those in the app.
 
 ## Deploy to GitHub Pages
 
