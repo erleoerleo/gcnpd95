@@ -172,6 +172,10 @@ export default function App() {
           <div className="file-chip" title={file.name}>
             <strong>{file.name}</strong>
             <span>{parsed?.lines.length.toLocaleString()} lines, {file.encoding}</span>
+            <span className="local-badge" title="The file is processed in this browser tab only. Nothing is uploaded.">
+              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 1 1 6 0v3H9Zm3 4a2 2 0 0 1 1 3.73V19h-2v-1.27A2 2 0 0 1 12 14Z"/></svg>
+              Processed locally
+            </span>
           </div>
         )}
         <div className="spacer" />

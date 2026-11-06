@@ -317,3 +317,10 @@ table.grid tr:hover td { background: var(--surface-2); }
 .fix-rename { margin: 0 0 12px !important; }
 .chart-canvas.chrom { height: 440px; }
 .toolbar label.note { display: inline-flex; gap: 6px; align-items: center; }
+
+/* ---------- Privacy ---------- */
+.privacy { display: flex; gap: 14px; align-items: flex-start; margin: 0 0 22px; padding: 14px 16px; border-radius: 6px; background: var(--ok-soft); border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent); max-width: 60ch; }
+.privacy-icon { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--ok); color: #fff; }
+.privacy strong { display: block; font-size: 18px; font-stretch: 108%; font-weight: 750; letter-spacing: -0.01em; color: var(--ink); margin-bottom: 2px; }
+.privacy span:not(.privacy-icon) { color: var(--ink-2); font-size: 14.5px; }
+.local-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 10px; background: var(--ok-soft); color: var(--ok); font-size: 12px; font-weight: 600; white-space: nowrap; }

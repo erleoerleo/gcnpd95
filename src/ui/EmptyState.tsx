@@ -7,15 +7,23 @@ export function EmptyState(props: { onFile: (f: File) => void; onExample: () => 
     <div className="empty">
       <div>
         <h1>Check, explore and convert GC-NPD-95 files</h1>
+        <div className="privacy" role="note">
+          <span className="privacy-icon"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 1 1 6 0v3H9Zm3 4a2 2 0 0 1 1 3.73V19h-2v-1.27A2 2 0 0 1 12 14Z"/></svg></span>
+          <div>
+            <strong>Your files never leave your computer</strong>
+            <span>
+              Validation, charts, fixes and exports all run in this browser tab. Nothing is uploaded, stored or sent anywhere,
+              so confidential well data stays with you.
+            </span>
+          </div>
+        </div>
         <p>
-          Open a geochemical data file to validate it against the GC-NPD-95 version 2.0 format and the GC-DIC-V2 dictionary used by
-          Sodir for the Diskos database. Inspect sites, samples, fractions and results, plot them, and export to Excel or flat text.
-        </p>
-        <p>
-          Files never leave your computer. Everything runs in this browser tab.
+          Open a geochemical data file to validate it against the GC-NPD-95 version 2.0 format, the GC-DIC-V2 dictionary and
+          Sodir's approved wellbore and company lists for the Diskos database. Inspect sites, samples, fractions and results, plot
+          them, fix simple errors, and export to Excel, text or JSON.
         </p>
         <ul>
-          <li>Sodir profile: the full Norwegian rules, including the wellbore list and company codes.</li>
+          <li>Sodir profile: the full Norwegian rules, including the approved wellbore and company lists.</li>
           <li>Generic profile: the same format and dictionary checks, for data from other countries.</li>
           <li>Every problem links to its line in the file, with a suggested fix where one is clear.</li>
         </ul>
@@ -44,7 +52,7 @@ export function EmptyState(props: { onFile: (f: File) => void; onExample: () => 
           <button className="btn primary" onClick={() => input.current?.click()}>Choose file</button>
           <button className="btn" onClick={props.onExample}>Open Sodir example file</button>
         </div>
-        <small>GCH_RAW.ASC and other GC-NPD-95 v2.0 text files, comma, semicolon or TAB delimited</small>
+        <small>GCH_RAW.ASC and other GC-NPD-95 v2.0 text files, comma, semicolon or TAB delimited. The file is read in your browser, not uploaded.</small>
         {props.error && <div className="error-box" style={{ textAlign: 'left' }}>{props.error}</div>}
         <input
           ref={input}
