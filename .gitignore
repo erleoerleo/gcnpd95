@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# real lab files for local regression tests (may be confidential)
+data/test/

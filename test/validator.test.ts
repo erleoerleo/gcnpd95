@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATALOGUE } from '../src/core/defaultCatalogue';
 import { decodeBytes, parseGcNpd95, splitRecord } from '../src/core/parser';
@@ -199,10 +199,12 @@ describe('approved lists', () => {
   });
 });
 
+// Real files accepted by the official Sodir validator can be put in data/test (kept out of the
+// repository if they are confidential). Every one of them must validate without errors.
 describe('files accepted by the official Sodir validator (data/test)', () => {
   const dir = new URL('../data/test/', import.meta.url);
-  const files = readdirSync(dir).filter((f) => /\.(txt|asc)$/i.test(f));
-  it('has test files', () => expect(files.length).toBeGreaterThan(0));
+  const files = existsSync(dir) ? readdirSync(dir).filter((f) => /\.(txt|asc)$/i.test(f)) : [];
+  it.skipIf(files.length > 0)('no files in data/test (skipped)', () => {});
   for (const f of files) {
     it(`${f} has no errors`, () => {
       const { text, encoding } = decodeBytes(readFileSync(new URL(encodeURIComponent(f), dir)));
