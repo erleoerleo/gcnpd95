@@ -26,7 +26,11 @@ on GitHub Pages or any static host.
 - **Data**: hierarchy (site, sample, fraction, analysis), entity tables, all results flattened,
   and one wide table per analysis type (RE, GC, ISOT, ...), with units from the dictionary.
 - **Charts**: Rock-Eval HI–Tmax and S2–TOC with kerogen type guides, depth tracks
-  (composite-log style), GC fingerprints by detector and peak property, and a cross-plot by sample.
+  (composite-log style), GC peaks per detector and peak property as a reconstructed chromatogram
+  or as bars, and a cross-plot by sample. GC-NPD-95 holds one value per compound, not the detector
+  signal, so the chromatogram draws each reported peak as a Gaussian: n-alkanes, pristane, phytane
+  and C1–C9 light hydrocarbons at approximate retention indices, other compounds (e.g. m/z 191 and
+  217 biomarkers) in reported elution order. Up to four analyses can be overlaid or stacked.
 - **Source** view with problem markers and previous/next problem navigation.
 - **Export** the file itself as `GCH_RAW.ASC`, or convert it to a formatted Excel workbook, delimited text (TAB, semicolon or comma; UTF-8 or
   ISO 8859-1), JSON, and a plain text validation report.
@@ -118,6 +122,7 @@ src/core/flatten.ts     flat and wide tables, delimited text
 src/core/excel.ts       Excel export (ExcelJS, loaded on demand)
 src/core/json.ts        JSON export (nested and flat)
 src/core/chartdata.ts   data preparation for charts
+src/core/chromatogram.ts  peak placement (retention index / elution order) and reconstructed traces
 src/ui/                 React components
 scripts/                catalogue builder and command-line validator
 test/                   Vitest tests

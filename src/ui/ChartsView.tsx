@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ChartConfiguration, ChartDataset } from 'chart.js';
 import type { Catalogue } from '../core/catalogue';
 import { analysisPoints, gcData, samplePoints, type AnalysisPoint, type KeyInfo } from '../core/chartdata';
+import { peakSigma, placePeaks, trace } from '../core/chromatogram';
 import type { ParsedFile } from '../core/types';
 import { axis, baseOptions, ChartCanvas, POINT_STYLES, useTheme, type Theme } from './ChartCanvas';
 
@@ -298,17 +299,35 @@ function Legend({ sites, styles }: { sites: string[]; styles: ReturnType<typeof 
   );
 }
 
+type PeakView = 'chromatogram' | 'bars';
+
 function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
   const gc = useMemo(() => gcData(parsed), [parsed]);
-  const [group, setGroup] = useState(gc.groups[0]?.id ?? '');
+  // start with the most familiar trace: most n-alkanes first, then most compounds
+  const score = (analId: string, groupId: string) => {
+    const rows = gc.analyses.find((a) => a.analId === analId)?.groups.get(groupId) ?? [];
+    return rows.filter((r) => /^nC\d+$/.test(r.name)).length * 1000 + rows.length;
+  };
+  const best = (groupId: string, n: number) =>
+    [...(gc.groups.find((x) => x.id === groupId)?.analyses ?? [])].sort((a, b) => score(b, groupId) - score(a, groupId)).slice(0, n);
+  const initial = useMemo(() => {
+    const top = (id: string) => Math.max(...(gc.groups.find((x) => x.id === id)?.analyses ?? []).map((a) => score(a, id)));
+    return [...gc.groups].filter((x) => x.peakProperty !== 'ISOTRATIO').sort((x, y) => top(y.id) - top(x.id))[0]?.id ?? gc.groups[0]?.id ?? '';
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gc]);
+  const [group, setGroup] = useState(initial);
   const g = gc.groups.find((x) => x.id === group) ?? gc.groups[0];
-  const [selected, setSelected] = useState<string[]>(() => (g ? g.analyses.slice(0, 2) : []));
+  const [selected, setSelected] = useState<string[]>(() => (g ? best(g.id, 2) : []));
   const [normalise, setNormalise] = useState(true);
+  const [view, setView] = useState<PeakView>('chromatogram');
+  const [stack, setStack] = useState(true);
   const avail = g ? g.analyses : [];
   const sel = selected.filter((a) => avail.includes(a));
-  const active = sel.length ? sel : avail.slice(0, 1);
+  const active = sel.length ? sel : g ? best(g.id, 1) : [];
+  const isIso = g?.peakProperty === 'ISOTRATIO';
+  const mode: PeakView = isIso ? 'bars' : view;
 
-  const cfg = useMemo<ChartConfiguration | null>(() => {
+  const prepared = useMemo(() => {
     if (!g) return null;
     const names: string[] = [];
     const orderOf = new Map<string, number>();
@@ -318,50 +337,154 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
       }
     }
     names.sort((a, b) => orderOf.get(a)! - orderOf.get(b)!);
-    const datasets = active.map((id, i) => {
-      const rows = gc.analyses.find((a) => a.analId === id)?.groups.get(g.id) ?? [];
-      const m = new Map(rows.map((r) => [r.name, r.value]));
+    const series = active.map((id) => {
+      const a = gc.analyses.find((x) => x.analId === id);
+      const rows = a?.groups.get(g.id) ?? [];
       const max = Math.max(...rows.map((r) => Math.abs(r.value)), 1e-12);
-      const isIso = g.peakProperty === 'ISOTRATIO';
-      return {
-        label: gc.analyses.find((a) => a.analId === id)?.label ?? id,
-        data: names.map((n) => (m.has(n) ? (normalise && !isIso ? (100 * m.get(n)!) / max : m.get(n)!) : null)),
-        backgroundColor: t.series[i % t.series.length],
-        borderRadius: 3,
-        borderSkipped: 'start' as const,
-        maxBarThickness: 18,
-        categoryPercentage: 0.8,
-        barPercentage: 0.92,
-      };
+      const values = new Map(rows.map((r) => [r.name, normalise && !isIso ? (100 * r.value) / max : r.value]));
+      return { id, label: a?.label ?? id, values };
     });
-    const unit = g.peakProperty === 'ISOTRATIO' ? `${g.detector} (‰)` : normalise ? '% of largest peak' : g.peakProperty;
+    return { names, series };
+  }, [g, active.join(), normalise, isIso, gc]);
+
+  const unit = isIso ? `${g?.detector} (‰)` : normalise ? '% of largest peak' : g?.peakProperty ?? '';
+
+  const barCfg = useMemo<ChartConfiguration | null>(() => {
+    if (!prepared || mode !== 'bars') return null;
     return {
       type: 'bar',
-      data: { labels: names, datasets },
+      data: {
+        labels: prepared.names,
+        datasets: prepared.series.map((s, i) => ({
+          label: s.label,
+          data: prepared.names.map((n) => s.values.get(n) ?? null),
+          backgroundColor: t.series[i % t.series.length],
+          borderRadius: 3,
+          borderSkipped: 'start' as const,
+          maxBarThickness: 18,
+          categoryPercentage: 0.8,
+          barPercentage: 0.92,
+        })),
+      },
       options: {
         ...baseOptions(t),
-        plugins: { ...baseOptions(t).plugins, legend: { ...baseOptions(t).plugins.legend, display: active.length > 1 } },
+        plugins: { ...baseOptions(t).plugins, legend: { ...baseOptions(t).plugins.legend, display: prepared.series.length > 1 } },
         scales: { x: axis(t, '', { grid: { display: false }, ticks: { color: t.muted, autoSkip: false, maxRotation: 70, minRotation: 0 } }), y: axis(t, unit) },
       },
     };
-  }, [g, active.join(), normalise, t, gc]);
+  }, [prepared, mode, t, unit]);
 
-  if (!g || !cfg) return null;
+  const chrom = useMemo(() => {
+    if (!prepared || mode !== 'chromatogram') return null;
+    const { peaks, axis: xAxis } = placePeaks(prepared.names);
+    const xOf = new Map(peaks.map((p) => [p.name, p.x]));
+    const xs = peaks.map((p) => p.x);
+    const lo = Math.min(...xs);
+    const hi = Math.max(...xs);
+    // at least ~1.5 px wide at normal chart widths, so very close peaks still draw cleanly
+    const sigma = Math.max(peakSigma(xs), (hi - lo) / 350);
+    const pad = Math.max(sigma * 8, (hi - lo) * 0.03);
+    const range: [number, number] = [lo - pad, hi + pad];
+    const top = Math.max(1e-12, ...prepared.series.flatMap((s) => [...s.values.values()]));
+    const step = stack && prepared.series.length > 1 ? top * 1.45 : 0;
+    const apexes: { x: number; y: number; base: number; name: string }[] = [];
+    const datasets: ChartDataset[] = [];
+    prepared.series.forEach((s, i) => {
+      const offset = (prepared.series.length - 1 - i) * step;
+      const pk = [...s.values.entries()].map(([name, h]) => ({ x: xOf.get(name)!, h, name }));
+      datasets.push({
+        type: 'line',
+        label: s.label,
+        data: trace(pk, sigma, range).map((p) => ({ x: p.x, y: p.y + offset })),
+        borderColor: t.series[i % t.series.length],
+        backgroundColor: t.series[i % t.series.length],
+        borderWidth: 1.4,
+        pointRadius: 0,
+        pointHitRadius: 0,
+        tension: 0,
+        parsing: false,
+      } as ChartDataset);
+      const smax = Math.max(...pk.map((p) => p.h), 1e-12);
+      datasets.push({
+        type: 'scatter',
+        label: `apex:${s.id}`,
+        data: pk.map((p) => ({ x: p.x, y: p.h + offset, label: `${p.name}: ${fmt(p.h)}${normalise ? ' %' : ''}` })),
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHitRadius: 6,
+        backgroundColor: t.series[i % t.series.length],
+      } as ChartDataset);
+      if (i === 0 || step) for (const p of pk) if (p.h >= smax * 0.002) apexes.push({ x: p.x, y: p.h + offset, base: offset, name: p.name });
+    });
+    const cfg: ChartConfiguration = {
+      type: 'line',
+      data: { datasets },
+      options: {
+        ...baseOptions(t),
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+        plugins: {
+          ...baseOptions(t).plugins,
+          legend: { ...baseOptions(t).plugins.legend, display: prepared.series.length > 1, labels: { ...baseOptions(t).plugins.legend.labels, filter: (it: { text: string }) => !it.text.startsWith('apex:') } },
+          tooltip: { ...baseOptions(t).plugins.tooltip, filter: (it) => String(it.dataset.label).startsWith('apex:'), callbacks: { title: () => '', label: (c) => (c.raw as XY).label } },
+        },
+        scales: {
+          x: axis(t, xAxis === 'retention' ? 'Retention index (approximate)' : 'Elution order (as reported)', {
+            type: 'linear',
+            min: range[0],
+            max: range[1],
+            ticks: { color: t.muted, padding: 6, display: xAxis === 'retention' },
+            afterBuildTicks: (sc: { min: number; max: number; ticks: { value: number }[] }) => {
+              const stepX = sc.max - sc.min > 1500 ? 200 : 100;
+              const out: { value: number }[] = [];
+              for (let v = Math.ceil(sc.min / stepX) * stepX; v <= sc.max; v += stepX) out.push({ value: v });
+              sc.ticks = out;
+            },
+            grid: { display: false },
+          }),
+          y: axis(t, step ? `${unit}, traces offset` : unit, { min: 0, max: (top + step * (prepared.series.length - 1)) * 1.18, ticks: { color: t.muted, padding: 6, display: !step } }),
+        },
+      },
+      plugins: [peakLabels(t, apexes)],
+    };
+    return { cfg, axis: xAxis };
+  }, [prepared, mode, stack, t, unit, normalise]);
+
+  if (!g || !prepared) return null;
+  const ion = /^\d+$/.test(g.detector) ? `m/z ${g.detector}` : g.detector;
   return (
     <div className="chart-section">
-      <h3>GC fingerprint</h3>
-      <p>Compounds in the order they are reported, one detector and peak property at a time. Compare up to four analyses.</p>
+      <h3>GC peaks</h3>
+      <p>
+        {mode === 'chromatogram'
+          ? `Reconstructed from the reported peak values: the file holds one value per compound, not the detector signal. ${
+              chrom?.axis === 'retention'
+                ? 'Peaks are placed at approximate retention indices (n-alkanes at 100 × carbon number, pristane 1707, phytane 1811); other compounds are spaced between them in reported order.'
+                : 'Peaks are spaced in the order they are reported, which follows the NIGOGA elution order.'
+            }`
+          : 'Compounds in the order they are reported, one detector and peak property at a time.'}
+      </p>
       <div className="toolbar">
-        <select className="input" value={g.id} onChange={(e) => { setGroup(e.target.value); setSelected([]); }} aria-label="Detector and peak property">
+        <select className="input" value={g.id} onChange={(e) => { setGroup(e.target.value); setSelected(best(e.target.value, 2)); }} aria-label="Detector and peak property">
           {gc.groups.map((x) => (
             <option key={x.id} value={x.id}>
               {/^\d+$/.test(x.detector) ? `m/z ${x.detector}` : x.detector}, {x.peakProperty} ({x.analyses.length} {x.analyses.length === 1 ? 'analysis' : 'analyses'})
             </option>
           ))}
         </select>
-        {g.peakProperty !== 'ISOTRATIO' && (
-          <label className="note" style={{ display: 'inline-flex', gap: 6 }}>
+        {!isIso && (
+          <div className="seg" role="group" aria-label="Show peaks as">
+            <button aria-pressed={view === 'chromatogram'} onClick={() => setView('chromatogram')}>Chromatogram</button>
+            <button aria-pressed={view === 'bars'} onClick={() => setView('bars')}>Bars</button>
+          </div>
+        )}
+        {!isIso && (
+          <label className="note">
             <input type="checkbox" checked={normalise} onChange={(e) => setNormalise(e.target.checked)} /> Normalise to largest peak
+          </label>
+        )}
+        {mode === 'chromatogram' && active.length > 1 && (
+          <label className="note">
+            <input type="checkbox" checked={stack} onChange={(e) => setStack(e.target.checked)} /> Stack traces
           </label>
         )}
       </div>
@@ -382,9 +505,46 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
           );
         })}
       </div>
-      <div className="chart-box"><ChartCanvas config={cfg} label="GC fingerprint bar chart" /></div>
+      <div className="chart-box">
+        {mode === 'chromatogram' && chrom ? (
+          <ChartCanvas config={chrom.cfg} label={`Reconstructed ${ion} chromatogram`} className="chart-canvas chrom" />
+        ) : barCfg ? (
+          <ChartCanvas config={barCfg} label={`${ion} peaks as bars`} />
+        ) : null}
+      </div>
     </div>
   );
+}
+
+/** Compound names written vertically above the peak apexes, skipping labels that would overlap. */
+function peakLabels(t: Theme, apexes: { x: number; y: number; base: number; name: string }[]) {
+  return {
+    id: 'peakLabels',
+    afterDatasetsDraw(chart: import('chart.js').Chart) {
+      const { ctx, scales, chartArea } = chart;
+      ctx.save();
+      ctx.font = "10.5px 'Archivo', system-ui, sans-serif";
+      ctx.fillStyle = t.ink;
+      ctx.textBaseline = 'middle';
+      const used: { x: number; y0: number; y1: number }[] = [];
+      const sorted = [...apexes].sort((a, b) => b.y - a.y);
+      for (const a of sorted) {
+        const px = scales.x.getPixelForValue(a.x);
+        const py = scales.y.getPixelForValue(a.y) - 4;
+        const w = ctx.measureText(a.name).width;
+        if (px < chartArea.left || px > chartArea.right || py - w < chartArea.top - 2) continue;
+        // each labelled peak reserves its column from the label down to its own baseline
+        if (used.some((u) => Math.abs(u.x - px) < 11 && py > u.y0 - 2 && py - w < u.y1 + 2)) continue;
+        used.push({ x: px, y0: py - w, y1: scales.y.getPixelForValue(a.base) });
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText(a.name, 0, 0);
+        ctx.restore();
+      }
+      ctx.restore();
+    },
+  };
 }
 
 function CrossPlot({ points, keys, styles, t }: { points: AnalysisPoint[]; keys: KeyInfo[]; styles: ReturnType<typeof siteStyles>; t: Theme }) {

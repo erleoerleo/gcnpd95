@@ -7,6 +7,7 @@ import { flatRows, toDelimited } from '../src/core/flatten';
 import { toJson } from '../src/core/json';
 import { parseList, withLists } from '../src/core/lists';
 import { applyFixes, collectFixes } from '../src/core/fixer';
+import { placePeaks, peakSigma, trace } from '../src/core/chromatogram';
 
 const cat = DEFAULT_CATALOGUE;
 const example = decodeBytes(readFileSync(new URL('../public/eksempelfil.txt', import.meta.url))).text.replace(/\r\n/g, '\n');
@@ -256,5 +257,26 @@ describe('automatic fixes', () => {
     const fixed = applyFixes(t, ',', groups.map((g) => ({ group: g })));
     expect(fixed).toContain('08,10100-01A02,2.22,5.704,91.3\r\n-----\r\n00,DEFINE BLOCK,09');
     expect(run(fixed).counts.error).toBe(0);
+  });
+});
+
+describe('reconstructed chromatogram', () => {
+  it('places n-alkanes and isoprenoids at retention indices, even when reported at the end', () => {
+    const { peaks, axis } = placePeaks(['nC15', 'nC16', 'nC17', 'nC18', 'Pristane', 'Phytane']);
+    expect(axis).toBe('retention');
+    expect(Object.fromEntries(peaks.map((p) => [p.name, p.x]))).toEqual({ nC15: 1500, nC16: 1600, nC17: 1700, nC18: 1800, Pristane: 1707, Phytane: 1811 });
+  });
+  it('spaces biomarkers in reported order and interpolates unknowns between anchors', () => {
+    expect(placePeaks(['27Ts', '27Tm', '30ab']).axis).toBe('order');
+    const p = placePeaks(['nC6', 'MCyC5', 'Benzene', 'Foo', 'nC7']).peaks;
+    expect(p[3].x).toBeGreaterThan(654);
+    expect(p[3].x).toBeLessThan(700);
+  });
+  it('keeps neighbouring peaks resolved', () => {
+    const xs = [1700, 1707, 1800, 1811];
+    const s = peakSigma(xs);
+    const tr = trace(xs.map((x) => ({ x, h: 100 })), s, [1650, 1850]);
+    const between = tr.filter((q) => q.x > 1702 && q.x < 1705);
+    expect(Math.min(...between.map((q) => q.y))).toBeLessThan(60);
   });
 });

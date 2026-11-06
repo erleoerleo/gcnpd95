@@ -315,3 +315,5 @@ table.grid tr:hover td { background: var(--surface-2); }
 .fix-code { font-family: var(--mono); font-size: 12.5px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 .fix-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .fix-rename { margin: 0 0 12px !important; }
+.chart-canvas.chrom { height: 440px; }
+.toolbar label.note { display: inline-flex; gap: 6px; align-items: center; }
