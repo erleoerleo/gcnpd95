@@ -497,7 +497,7 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
         )}
         {mode === 'chromatogram' && chosen.length > 1 && (
           <label className="note">
-            <input type="checkbox" checked={stack} onChange={(e) => setStack(e.target.checked)} /> Stack traces
+            <input type="checkbox" checked={!stack} onChange={(e) => setStack(!e.target.checked)} /> Overlay traces
           </label>
         )}
       </div>

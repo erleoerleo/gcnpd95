@@ -31,7 +31,8 @@ on any static web server, such as gcnpd95.no.
   or as bars, and a cross-plot by sample. GC-NPD-95 holds one value per compound, not the detector
   signal, so the chromatogram draws each reported peak as a Gaussian: n-alkanes, pristane, phytane
   and C1–C9 light hydrocarbons at approximate retention indices, other compounds (e.g. m/z 191 and
-  217 biomarkers) in reported elution order. Up to four analyses can be overlaid or stacked.
+  217 biomarkers) in reported elution order. Any number of analyses can be shown, each on its own
+  baseline or overlaid ("Overlay traces"); the bar view compares up to four.
 - **Source** view with problem markers and previous/next problem navigation.
 - **Export** the file itself as `GCH_RAW.ASC`, or convert it to a formatted Excel workbook, delimited text (TAB, semicolon or comma; UTF-8 or
   ISO 8859-1), JSON, and a plain text validation report.
