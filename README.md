@@ -7,6 +7,7 @@ geochemical data sent to the Diskos database.
 Everything runs in the browser. Files are never uploaded anywhere, so the app can be hosted
 on any static web server, such as gcnpd95.no.
 
+
 ## What it does
 
 - **Validation** against the format specification (`data/spesifikasjon-eng.pdf`), the GC-DIC-V2
