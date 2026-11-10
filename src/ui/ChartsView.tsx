@@ -324,9 +324,7 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
   const avail = g ? g.analyses : [];
   const isIso = g?.peakProperty === 'ISOTRATIO';
   const mode: PeakView = isIso ? 'bars' : view;
-  // Stacked traces are told apart by position, overlaid traces and bars only by colour.
-  const stacked = mode === 'chromatogram' && stack;
-  const limit = stacked ? MAX_STACKED : MAX_OVERLAID;
+  const limit = mode === 'chromatogram' ? Infinity : MAX_OVERLAID;
   const sel = selected.filter((a) => avail.includes(a));
   const chosen = sel.length ? sel : g ? best(g.id, 1) : [];
   const active = chosen.slice(0, limit);
@@ -400,14 +398,14 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
       if (step) {
         // name the trace on whichever end of its baseline has no peaks
         const busy = (from: number, to: number) => pk.some((p) => p.h > 0 && p.x >= range[0] + (range[1] - range[0]) * from && p.x <= range[0] + (range[1] - range[0]) * to);
-        baselines.push({ y: offset, text: s.label, color: t.series[i % t.series.length], right: busy(0, 0.3) && !busy(0.65, 1) });
+        baselines.push({ y: offset, text: s.label, color: traceColor(t, i), right: busy(0, 0.3) && !busy(0.65, 1) });
       }
       datasets.push({
         type: 'line',
         label: s.label,
         data: trace(pk, sigma, range).map((p) => ({ x: p.x, y: p.y + offset })),
-        borderColor: t.series[i % t.series.length],
-        backgroundColor: t.series[i % t.series.length],
+        borderColor: traceColor(t, i),
+        backgroundColor: traceColor(t, i),
         borderWidth: 1.4,
         pointRadius: 0,
         pointHitRadius: 0,
@@ -422,7 +420,7 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
         pointRadius: 0,
         pointHoverRadius: 4,
         pointHitRadius: 6,
-        backgroundColor: t.series[i % t.series.length],
+        backgroundColor: traceColor(t, i),
       } as ChartDataset);
       if (i === 0 || step) for (const p of pk) if (p.h >= smax * 0.002) apexes.push({ x: p.x, y: p.h + offset, base: offset, name: p.name });
     });
@@ -506,7 +504,7 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
       <div className="filters" role="group" aria-label="Analyses">
         {avail.length > 2 && (
           <span className="note">
-            {chosen.length} of {avail.length} selected, up to {limit}{stacked ? '' : ` (${MAX_STACKED} when stacked)`}.{' '}
+            {chosen.length} of {avail.length} selected{mode === 'chromatogram' ? '' : `, up to ${limit} (any number in the chromatogram)`}.{' '}
             <button className="btn ghost" onClick={() => setSelected(avail.slice(0, limit))}>Select {avail.length > limit ? `first ${limit}` : 'all'}</button>
             <button className="btn ghost" onClick={() => setSelected(chosen.slice(0, 1))}>Clear</button>
           </span>
@@ -529,7 +527,7 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
       </div>
       {chosen.length > active.length && (
         <p className="note">
-          Showing the first {active.length} of {chosen.length} selected analyses. {mode === 'chromatogram' ? 'Stack the traces' : 'Use the stacked chromatogram'} to compare up to {MAX_STACKED}.
+          Showing the first {active.length} of {chosen.length} selected analyses. Use the chromatogram to compare more.
         </p>
       )}
       <div className="chart-box">
@@ -544,7 +542,13 @@ function GcFingerprint({ parsed, t }: { parsed: ParsedFile; t: Theme }) {
 }
 
 const MAX_OVERLAID = 4;
-const MAX_STACKED = 12;
+
+/** Palette colours first, then generated hues (golden-angle spacing, stable per index) for any further traces. */
+function traceColor(t: Theme, i: number) {
+  if (i < t.series.length) return t.series[i];
+  const hue = Math.round((i * 137.508) % 360);
+  return `hsl(${hue} 65% ${t.dark ? 62 : 45}%)`;
+}
 
 /** Names each stacked trace on its own baseline (with its colour as a swatch), so identity does not rely on colour. */
 function traceLabels(t: Theme, baselines: { y: number; text: string; color: string; right: boolean }[]) {
